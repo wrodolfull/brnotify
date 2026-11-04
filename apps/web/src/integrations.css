@@ -45,3 +45,12 @@
  .integration-choice{padding:11px}
  .integration-response{display:none}
 }
+
+.integration-health{background:#fff;border:1px solid #eaedf1;border-radius:15px;padding:15px 18px;margin-bottom:18px}
+.integration-health-head{display:flex;align-items:center;gap:8px;color:#4d5968}
+.integration-health-head strong{font-size:12px}
+.integration-health-head span{color:#8993a1;font-size:10px;margin-left:auto}
+.integration-health-list{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.integration-health-item{font-size:10px;line-height:1.5;padding:8px 11px;border-radius:8px;background:#f2f6fc;color:#55708f}
+.integration-health-warning{background:#fff7e8;color:#a47527}
+.integration-health-critical{background:#fff0ee;color:#b34e49}

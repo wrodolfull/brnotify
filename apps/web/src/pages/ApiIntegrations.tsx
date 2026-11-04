@@ -1,4 +1,4 @@
-import {useState,type FormEvent} from 'react';
+import {useEffect,useState,type FormEvent} from 'react';
 import {
  Activity,AlertCircle,ArrowUpRight,BookOpen,Check,Clipboard,Code2,
  KeyRound,Link2,Plus,RefreshCw,RotateCcw,ShieldCheck,Trash2,
@@ -63,11 +63,13 @@ export function ApiIntegrations(){
  const [scopes,setScopes]=useState<string[]>(['contacts:read','contacts:write','events:read','events:write']);
  const [events,setEvents]=useState<string[]>(['reminder.sent','reminder.delivered','reminder.failed']);
  const [busy,setBusy]=useState(false),[error,setError]=useState('');
- const keys=useList('/api/integrations/keys');
- const hooks=useList('/api/integrations/webhooks');
- const deliveries=useList('/api/integrations/deliveries');
- const logs=useList('/api/integrations/logs');
- const inbound=useList('/api/integrations/inbound');
+ const [health,setHealth]=useState<any>(null);
+ useEffect(()=>{let alive=true;api('/api/integrations/health').then(result=>{if(alive)setHealth(result)}).catch(()=>{});return()=>{alive=false}},[api]);
+ const keys=useList('/api/integrations/keys',tab==='keys');
+ const hooks=useList('/api/integrations/webhooks',tab==='webhooks');
+ const deliveries=useList('/api/integrations/deliveries',tab==='deliveries');
+ const logs=useList('/api/integrations/logs',tab==='logs');
+ const inbound=useList('/api/integrations/inbound',tab==='inbound');
  const loadingError=tab==='keys'?keys.error:tab==='webhooks'?hooks.error:tab==='deliveries'?deliveries.error:tab==='logs'?logs.error:inbound.error;
  const docsLink=API_URL+'/v1/openapi.json';
  const toggle=(value:string,selected:string[],setter:(values:string[])=>void)=>{
@@ -108,6 +110,10 @@ export function ApiIntegrations(){
    <span className="integration-explainer-icon"><Link2 size={20}/></span>
    <div><strong>Sua operação, conectada.</strong><span>Chaves limitadas ao ambiente atual. Dados externos chegam pela API; eventos e status são devolvidos por webhooks assinados.</span></div>
   </div>
+  {health?.alerts?.length>0&&<section className="integration-health" aria-label="Saúde das integrações">
+    <div className="integration-health-head"><AlertCircle size={17}/><strong>Verificações operacionais</strong><span>{health.alerts.length} aviso(s)</span></div>
+    <div className="integration-health-list">{health.alerts.map((alert:any)=><div key={alert.code} className={'integration-health-item integration-health-'+alert.severity}>{alert.message}</div>)}</div>
+   </section>}
   <div className="integration-tablist" role="tablist" aria-label="Seções de integração">
    {choices.map(option=>{
     const Icon=option.icon;
