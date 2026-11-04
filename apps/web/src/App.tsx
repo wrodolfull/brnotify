@@ -1,7 +1,7 @@
 import {useCallback,useEffect,useMemo,useState,type FormEvent} from 'react';
 import type {Session} from '@supabase/supabase-js';
 import {NavLink,Navigate,Route,Routes,useLocation,useNavigate} from 'react-router-dom';
-import {Bell,Building2,CalendarDays,ChevronDown,Clock3,LayoutDashboard,LogOut,Menu,Send,Settings,Shield,Upload,Users,X,LockKeyhole} from 'lucide-react';
+import {Bell,Building2,CalendarDays,ChevronDown,Clock3,LayoutDashboard,LogOut,Menu,Send,Settings,Shield,Upload,Users,X,LockKeyhole,PlugZap} from 'lucide-react';
 import {supabase,callAPI,type Actor} from './api';
 import {AppContext} from './context';
 import {Button,Card,ErrorHint,Input,Loader} from './components';
@@ -12,6 +12,7 @@ import {Imports} from './pages/Imports';
 import {Automations} from './pages/Automations';
 import {Messages} from './pages/Messages';
 import {SettingsPage} from './pages/Settings';
+import {ApiIntegrations} from './pages/ApiIntegrations';
 import {Tenants} from './pages/Tenants';
 import {Members} from './pages/Members';
 function AuthScreen(){
@@ -72,14 +73,15 @@ function Workspace({session}:{session:Session}){
      <MenuItem to="/automations" icon={Clock3} label="Automações" onClose={close}/>
      <MenuItem to="/messages" icon={Send} label="Disparos" onClose={close}/>
      <span className="sidebar-caption nav-section">GERENCIAMENTO</span>
-     <MenuItem to="/settings" icon={Settings} label="Integrações" onClose={close}/>
+     <MenuItem to="/settings" icon={Settings} label="GoTo Connect" onClose={close}/>
+     {role==='admin'&&<MenuItem to="/api-integrations" icon={PlugZap} label="API e Integrações" onClose={close}/> }
      {isSuper&&<><MenuItem to="/tenants" icon={Building2} label="Ambientes" onClose={close}/><MenuItem to="/members" icon={Shield} label="Acessos" onClose={close}/></>}
     </nav>
     <div className="sidebar-bottom"><div className="account-circle">{(actor?.email||'').slice(0,1).toUpperCase()}</div><div className="sidebar-account"><strong>{(actor?.email||'').split('@')[0]}</strong><span>{isSuper?'Super Admin':role==='viewer'?'Visualizador':'Administrador'}</span></div><button title="Sair" className="logout" onClick={()=>supabase.auth.signOut()}><LogOut size={19}/></button></div>
    </aside>
    <div className="main-shell"><header className="topbar"><button className="mobile-menu" aria-label="Abrir menu" onClick={()=>setMenuOpen(true)}><Menu size={23}/></button><div className="topbar-breadcrumb"><span>BR Notify</span><span className="divider-dot">/</span><strong>{tenantName}</strong></div><div className="topbar-right"><span className="topbar-env">{isSuper?'Super Admin':role==='viewer'?'Visualização':'Admin'}</span><div className="topbar-avatar">{(actor?.email||'').slice(0,1).toUpperCase()}</div></div></header>
     <main className="page-content">{!tenantId&&location.pathname!=='/tenants'?<div className="empty-workspace"><Building2 size={34}/><h2>Nenhum ambiente selecionado</h2><p>Crie ou selecione um ambiente para começar.</p>{isSuper&&<Button onClick={()=>navigate('/tenants')}>Gerenciar ambientes</Button>}</div>:
-     <Routes><Route path="/" element={<Dashboard/>}/><Route path="/contacts" element={<Contacts/>}/><Route path="/events" element={<Events/>}/><Route path="/imports" element={<Imports/>}/><Route path="/automations" element={<Automations/>}/><Route path="/messages" element={<Messages/>}/><Route path="/settings" element={<SettingsPage/>}/><Route path="/tenants" element={isSuper?<Tenants/>:<Navigate to="/"/>}/><Route path="/members" element={isSuper?<Members/>:<Navigate to="/"/>}/><Route path="*" element={<Navigate to="/"/>}/></Routes>}</main>
+     <Routes><Route path="/" element={<Dashboard/>}/><Route path="/contacts" element={<Contacts/>}/><Route path="/events" element={<Events/>}/><Route path="/imports" element={<Imports/>}/><Route path="/automations" element={<Automations/>}/><Route path="/messages" element={<Messages/>}/><Route path="/settings" element={<SettingsPage/>}/><Route path="/api-integrations" element={role==='admin'?<ApiIntegrations/>:<Navigate to="/"/>}/><Route path="/tenants" element={isSuper?<Tenants/>:<Navigate to="/"/>}/><Route path="/members" element={isSuper?<Members/>:<Navigate to="/"/>}/><Route path="*" element={<Navigate to="/"/>}/></Routes>}</main>
    </div>
    {toast&&<div role="status" className={'toast toast-'+toast.kind}>{toast.message}<button onClick={()=>setToast(null)}><X size={15}/></button></div>}
   </div>
