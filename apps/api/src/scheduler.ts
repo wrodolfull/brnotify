@@ -52,6 +52,15 @@ export async function handleGotoWebhook(event:any){
  const tenantId=tenant.rows[0].tenant_id;
  const inserted=await query('insert into webhook_events(event_id,tenant_id,payload) values($1,$2,$3) on conflict do nothing returning event_id',[event.id,tenantId,JSON.stringify(event)]);
  if(!inserted.rowCount)return true;
+ if(event.type==='INBOUND_MESSAGE'&&event.content.payload?.channel==='WHATSAPP'){
+  const p=event.content.payload;
+  const text=String(p.body||'').trim().toUpperCase();
+  if(['STOP','SAIR','PARAR','CANCELAR','DESCADASTRAR'].includes(text)){
+   const author=String(p.authorTouchpoint||'');
+   const ct=await query("update contacts set consent=false,opted_out_at=now(),updated_at=now() where tenant_id=$1 and phone=$2 returning id",[tenantId,author]);
+   for(const c of ct.rows)await query("update scheduled_messages set status='cancelled',updated_at=now() where tenant_id=$1 and event_id in(select id from events where tenant_id=$1 and contact_id=$2) and status='scheduled'",[tenantId,c.id]);
+  }
+ }
  if(event.type==='DELIVERY_STATUS'){
   const payload=event.content.payload||{};
   if(typeof payload.messageId!=='string')return true;

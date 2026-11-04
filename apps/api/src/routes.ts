@@ -143,12 +143,13 @@ router.patch('/api/contacts/:id',tenant(true),activeTenant,wrap(async(req,res)=>
  const input=contactInput.partial().parse(req.body);
  const current=await query('select * from contacts where tenant_id=$1 and id=$2',[req.tenantId,uuid.parse(req.params.id)]);
  if(!current.rowCount)return res.status(404).json({error:'Contato não encontrado'});
- if(input.consent===true&&!input.consent_source&&!current.rows[0].consent_source)return res.status(422).json({error:'Informe a origem do consentimento'});
+ if(input.consent===true&&(!input.consent_source&&!current.rows[0].consent_source||current.rows[0].opted_out_at&&!input.consent_source))return res.status(422).json({error:'Informe nova origem de consentimento para reativar'});
  const old=current.rows[0];
  const changed=await query(
-  "update contacts set name=$3,phone=$4,email=$5,consent=$6,consent_source=$7,consent_at=case when $6=true and consent=false then now() else consent_at end,opted_out_at=case when $6=false then now() else opted_out_at end,custom_data=$8,updated_at=now() where tenant_id=$1 and id=$2 returning *",
-  [req.tenantId,old.id,input.name??old.name,input.phone?phoneE164(input.phone):old.phone,input.email??old.email,input.consent??old.consent,input.consent_source??old.consent_source,JSON.stringify(input.custom_data??old.custom_data)]
+  "update contacts set name=$3,phone=$4,email=$5,consent=$6,consent_source=$7,consent_at=case when $6=true and consent=false then now() else consent_at end,opted_out_at=case when $6=false then now() when $9=true then null else opted_out_at end,custom_data=$8,updated_at=now() where tenant_id=$1 and id=$2 returning *",
+  [req.tenantId,old.id,input.name??old.name,input.phone?phoneE164(input.phone):old.phone,input.email??old.email,input.consent??old.consent,input.consent_source??old.consent_source,JSON.stringify(input.custom_data??old.custom_data),input.consent===true&&!!input.consent_source]
  );
+ if(input.consent===true){const evs=await query("select id from events where tenant_id=$1 and contact_id=$2 and status='scheduled' and starts_at>now()",[req.tenantId,old.id]);for(const ev of evs.rows)await rebuildEvent(req.tenantId!,ev.id)}
  if(input.consent===false){
   await query("update scheduled_messages set status='cancelled' where tenant_id=$1 and event_id in(select id from events where tenant_id=$1 and contact_id=$2) and status='scheduled'",[req.tenantId,old.id]);
  }

@@ -3,12 +3,12 @@ import type {Request,Response} from 'express';
 import {query} from './db.js';
 import {segments} from './segments.js';
 import {phoneE164,parseImportedDate,toUTC,rebuildEvent} from './time.js';
-type ImportRow={name:string;phone:string;email:string;consent:boolean;consentSource:string;label:string;fields:Record<string,string>;title:string;startsAt:string};
+type ImportRow={name:string;phone:string;email:string;consent:boolean;consentSource:string;label:string;fields:Record<string,string>;title:string;startsAt:string;reminders:Record<string,unknown>|null};
 const baseHeaders=['nome','whatsapp','email','consentimento','origem_consentimento','registro','tipo_evento','data_evento','hora_evento'];
 const optionalHeaders=['lembrete_1','lembrete_2','lembrete_3'];
 function headers(segment:keyof typeof segments){return [...baseHeaders,...segments[segment].fields.map(x=>x[0]),...optionalHeaders]}
 const cell=(value:any):string=>{
- if(value instanceof Date)return value.toISOString();
+ if(value instanceof Date)return value.toLocaleDateString('pt-BR',{timeZone:'UTC'});
  if(value&&typeof value==='object'&&'text' in value)return String(value.text);
  return String(value??'').trim();
 };
@@ -31,9 +31,19 @@ async function readFile(file:Express.Multer.File){
  for(let i=2;i<=Math.min(ws.rowCount,1002);i++){
   const row=ws.getRow(i);
   if(!row.hasValues)continue;
-  rows.push({line:i,get:(k)=>cell(row.getCell(columns.get(k)||0).value)});
+  rows.push({line:i,get:(k)=>{const col=columns.get(k);return col?cell(row.getCell(col).value):''}});
  }
  return {rows,columns,truncated:ws.rowCount>1002};
+}
+function parseOverride(value:string){
+ const s=value.normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
+ if(!s)return null;
+ if(['off','nao','desativado','0'].includes(s))return {enabled:false};
+ const match=s.match(/^(\d{1,3})\s*(d|dias?|s|semanas?|m|mes|meses)$/);
+ if(!match)throw new Error('Lembrete inválido: use 1m, 3d, 1s ou off');
+ const unit=match[2].startsWith('m')?'months':match[2].startsWith('s')?'weeks':'days';
+ const n=Number(match[1]);if(n<1||n>365)throw new Error('Lembrete deve ter 1 a 365 unidades');
+ return {enabled:true,offset_value:n,offset_unit:unit};
 }
 export async function importHandler(req:Request,res:Response,dryRun:boolean){
  if(!req.file) return res.status(400).json({error:'Envie um XLSX ou CSV até 5 MB'});
@@ -61,7 +71,9 @@ export async function importHandler(req:Request,res:Response,dryRun:boolean){
    if(!title)throw new Error('Tipo do evento obrigatório');
    const fields:Record<string,string>={};
    for(const [key] of segments[segment].fields)if(row.get(key))fields[key]=row.get(key);
-   valid.push({name,phone,email:row.get('email'),consent,consentSource,label:row.get('registro')||fields.model||fields.pet_name||title,fields,title,startsAt});
+   const reminders:Record<string,unknown>={};
+   for(let slot=1;slot<=3;slot++){const override=parseOverride(row.get('lembrete_'+slot));if(override)reminders[String(slot)]=override}
+   valid.push({name,phone,email:row.get('email'),consent,consentSource,label:row.get('registro')||fields.model||fields.pet_name||title,fields,title,startsAt,reminders:Object.keys(reminders).length?reminders:null});
   }catch(e){failures.push({row:row.line,error:e instanceof Error?e.message:'Linha inválida'})}
  }
  if(dryRun)return res.json({total:rows.length,valid:valid.length,invalid:failures.length,truncated,errors:failures.slice(0,100),preview:valid.slice(0,5)});
@@ -73,7 +85,7 @@ export async function importHandler(req:Request,res:Response,dryRun:boolean){
     [req.tenantId,row.name,row.phone,row.email||null,row.consentSource]
    );
    const record=await query('insert into records(tenant_id,contact_id,label,kind,details) values($1,$2,$3,$4,$5) returning id',[req.tenantId,contact.rows[0].id,row.label,segment,JSON.stringify(row.fields)]);
-   const ev=await query('insert into events(tenant_id,contact_id,record_id,title,event_type,starts_at) values($1,$2,$3,$4,$5,$6) returning id',[req.tenantId,contact.rows[0].id,record.rows[0].id,row.title,row.title,row.startsAt]);
+   const ev=await query('insert into events(tenant_id,contact_id,record_id,title,event_type,starts_at,reminder_overrides) values($1,$2,$3,$4,$5,$6,$7) returning id',[req.tenantId,contact.rows[0].id,record.rows[0].id,row.title,row.title,row.startsAt,row.reminders?JSON.stringify(row.reminders):null]);
    await rebuildEvent(req.tenantId!,ev.rows[0].id);imported++;
   }catch(e){failures.push({row:imported+2,error:e instanceof Error?e.message:'Falha de persistência'})}
  }
@@ -91,7 +103,7 @@ export async function downloadTemplate(req:Request,res:Response){
  ws.getRow(1).fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF111827'}};
  ws.columns=cols.map(x=>({key:x,width:Math.max(18,x.length+4)}));
  const help=book.addWorksheet('Instruções');
- help.addRows([['BR Notify — modelo '+segments[segment].label],['Uma linha por evento.','Datas: DD/MM/AAAA ou AAAA-MM-DD'],['WhatsApp com DDD:','(19) 99999-9999'],['Consentimento:','SIM, com origem preenchida'],['Três lembretes:','Definidos em Automações do ambiente']]);
+ help.addRows([['BR Notify — modelo '+segments[segment].label],['Uma linha por evento.','Datas: DD/MM/AAAA ou AAAA-MM-DD'],['WhatsApp com DDD:','(19) 99999-9999'],['Consentimento:','SIM, com origem preenchida'],['Três lembretes:','Vazio=padrao; 1m=1 mes; 3d=3 dias; 1s=1 semana; off=desativar']]);
  const buffer=await book.xlsx.writeBuffer();
  res.setHeader('content-type','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
  res.setHeader('content-disposition','attachment; filename="brnotify-modelo-'+segment+'.xlsx"');

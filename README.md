@@ -9,7 +9,7 @@ Plataforma de lembretes multitenant por WhatsApp, com integração GoTo Messagin
 
 ## Instalação
 1. Requer Node.js 22+, Supabase (Auth + PostgreSQL) e uma organização GoTo com WhatsApp habilitado.
-2. Execute \`database/001_init.sql\` no SQL Editor do Supabase.
+2. Execute \`database/001_init.sql\` e depois \`database/002_rebuild_queue.sql\` no SQL Editor do Supabase.
 3. Copie \`.env.example\` para \`.env\` e configure os segredos apenas no servidor.
 4. Execute \`npm install\`.
 5. Execute \`npm run bootstrap -w @brnotify/api\` para criar o primeiro super administrador (requer BOOTSTRAP_EMAIL e BOOTSTRAP_PASSWORD; mínimo 12 caracteres).
@@ -22,13 +22,14 @@ Cadastro público desativado. Somente o Super Admin cria ambientes e convida usu
 ## WhatsApp
 Crie um OAuth Client no portal GoTo, configure os scopes \`messaging.v1.send messaging.v1.read messaging.v1.notifications.manage\` e cadastre \`GOTO_REDIRECT_URI\`. Em Configurações, autorize a conta, informe o \`accountKey\` e o identificador numérico Meta do remetente, então sincronize templates. Apenas templates de texto aprovados são enviados pelo MVP.
 
-Para status de entrega, configure no GoTo Notification Channel um webhook HTTPS apontando para \`/api/webhooks/goto/:secret\`, usando \`GOTO_WEBHOOK_SECRET\` como segredo aleatório longo e crie a assinatura do Messaging V2 com \`DELIVERY_STATUS\`. O webhook não é iniciado automaticamente; depende das permissões Super Admin GoTo. Restrinja o endpoint por gateway/IP quando possível. **A URL secreta não substitui uma assinatura criptográfica quando o provedor suportar uma.**
+Para status de entrega, configure no GoTo Notification Channel um webhook HTTPS apontando para \`/api/webhooks/goto/:secret\`, usando \`GOTO_WEBHOOK_SECRET\` como segredo aleatório longo e crie a assinatura do Messaging V2 com \`DELIVERY_STATUS\` e \`INBOUND_MESSAGE\` (opt-out por STOP/SAIR). O webhook não é iniciado automaticamente; depende das permissões Super Admin GoTo. Restrinja o endpoint por gateway/IP quando possível. **A URL secreta não substitui uma assinatura criptográfica quando o provedor suportar uma.**
 
 ## Segurança operacional
 - Não armazene credenciais no repositório, logs ou frontend.
 - Bloqueie REST/Data API direto ao banco; as tabelas estão com RLS habilitado e sem policies para browser.
 - Use DATABASE_URL de conexão PostgreSQL somente no backend.
-- Cada lista é paginada (20 padrão, máximo 50).
+- Cada lista é paginada em 20 registros.
+- Na planilha, as colunas lembrete_1/2/3 aceitam vazio (padrão do ambiente), 1m, 3d, 1s ou off.
 - O worker reserva jobs usando SKIP LOCKED, registra tentativas e não reenvia automaticamente resultados incertos de rede.
 - Teste real de autenticação, OAuth, templates e webhook antes de produção.
 
