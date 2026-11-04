@@ -90,6 +90,9 @@ create index if not exists outbound_webhooks_due_idx
 create index if not exists outbound_webhooks_tenant_idx
  on outbound_webhook_deliveries(tenant_id, created_at desc);
 
+alter table webhook_events add column if not exists processed_at timestamptz;
+update webhook_events set processed_at=received_at where processed_at is null;
+
 create table if not exists inbound_interactions (
  id bigserial primary key,
  tenant_id uuid not null references tenants(id) on delete cascade,

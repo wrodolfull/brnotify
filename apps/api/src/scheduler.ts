@@ -12,12 +12,12 @@ export async function processMessages(){
   let httpStatus:number|null=null;
   try{
    const data=await query(
-    'select m.*,e.title,e.event_type,e.starts_at,e.status as event_status,e.details as event_details,t.timezone,c.name,c.phone,c.email,c.consent,c.opted_out_at,c.custom_data,r.details as record_details,mt.name as template_name,mt.language_code,mt.status as template_status,mt.definition,mt.variable_map,g.from_touchpoint from scheduled_messages m join events e on e.id=m.event_id and e.tenant_id=m.tenant_id join tenants t on t.id=m.tenant_id join contacts c on c.id=e.contact_id and c.tenant_id=m.tenant_id left join records r on r.id=e.record_id and r.tenant_id=m.tenant_id left join message_templates mt on mt.id=m.template_id and mt.tenant_id=m.tenant_id left join goto_connections g on g.tenant_id=m.tenant_id where m.id=$1',
+    'select m.*,e.title,e.event_type,e.starts_at,e.status as event_status,e.confirmation_status,e.schedule_revision as event_revision,e.details as event_details,t.timezone,c.name,c.phone,c.email,c.consent,c.opted_out_at,c.custom_data,r.details as record_details,mt.name as template_name,mt.language_code,mt.status as template_status,mt.definition,mt.variable_map,g.from_touchpoint from scheduled_messages m join events e on e.id=m.event_id and e.tenant_id=m.tenant_id join tenants t on t.id=m.tenant_id join contacts c on c.id=e.contact_id and c.tenant_id=m.tenant_id left join records r on r.id=e.record_id and r.tenant_id=m.tenant_id left join message_templates mt on mt.id=m.template_id and mt.tenant_id=m.tenant_id left join goto_connections g on g.tenant_id=m.tenant_id where m.id=$1',
     [msg.id]
    );
    const v=data.rows[0];
    if(!v)throw new Error('Evento inexistente');
-   if(v.event_status!=='scheduled'||!v.consent||v.opted_out_at)throw new Error('Evento cancelado ou contato sem consentimento');
+   if(v.event_status!=='scheduled'||v.event_revision!==msg.schedule_revision||['reschedule_requested','declined'].includes(v.confirmation_status)||!v.consent||v.opted_out_at)throw new Error('Evento alterado, cancelado ou contato sem consentimento');
    if(!v.template_id||!v.definition||!v.from_touchpoint)throw new Error('Configure um template aprovado e remetente GoTo para este lembrete');
    if(DateTime.fromJSDate(new Date(v.starts_at)).toMillis()<=Date.now())throw new Error('Data do evento já passou');
    const payload=buildTemplatePayload(

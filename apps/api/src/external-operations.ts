@@ -78,11 +78,13 @@ export function offsetOverrides(input:ReminderPayload['reminders']){
  return override;
 }
 export async function upsertExternalContact(
- tenantId:string,body:z.infer<typeof contactSchema>,run:SqlRunner
+ tenantId:string,body:z.infer<typeof contactSchema>,run:SqlRunner,forcedId?:string
 ){
  const phone=phoneE164(body.phone);
  // Um identificador externo explícito tem prioridade sobre a busca por telefone.
- const existing=body.external_id
+ const existing=forcedId
+  ?await run('select * from contacts where tenant_id=$1 and id=$2 for update',[tenantId,forcedId])
+  :body.external_id
   ?await run('select * from contacts where tenant_id=$1 and external_id=$2 for update',[tenantId,body.external_id])
   :await run('select * from contacts where tenant_id=$1 and phone=$2 for update',[tenantId,phone]);
  const fallback=existing.rowCount?existing:

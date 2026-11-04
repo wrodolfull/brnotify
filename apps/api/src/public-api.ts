@@ -50,7 +50,7 @@ publicApiRouter.patch('/contacts/:id',requireScope('contacts:write'),wrap(async(
   consent:input.consent,
   consent_source:input.consent_source,
   custom_data:input.custom_data
- },run));
+ },run,id));
  res.json({id:updated.id,external_id:updated.external_id,name:updated.name,phone:updated.phone,consent:updated.consent,opted_out:!!updated.opted_out_at});
 }));
 
@@ -59,8 +59,8 @@ async function writeReminder(req:any,res:any){
  const result=await saveReminder(req.integrationKey.tenantId,data);
  res.status(result.created?201:200).json(result);
 }
-publicApiRouter.post('/reminders',requireScope('events:write'),wrap(writeReminder));
-publicApiRouter.post('/events',requireScope('events:write'),wrap(writeReminder));
+publicApiRouter.post('/reminders',requireScope('events:write'),requireScope('contacts:write'),wrap(writeReminder));
+publicApiRouter.post('/events',requireScope('events:write'),requireScope('contacts:write'),wrap(writeReminder));
 
 publicApiRouter.get('/events',requireScope('events:read'),wrap(async(req,res)=>{
  const tenantId=req.integrationKey!.tenantId,p=pageParams(req.query.page);
@@ -105,7 +105,7 @@ publicApiRouter.get('/messages',requireScope('messages:read'),wrap(async(req,res
  ]);
  res.json({items:items.rows,total:count.rows[0].total,page:p.page,pages:Math.ceil(count.rows[0].total/20)});
 }));
-publicApiRouter.post('/imports',requireScope('imports:write'),wrap(async(req,res)=>{
+publicApiRouter.post('/imports',requireScope('imports:write'),requireScope('events:write'),requireScope('contacts:write'),wrap(async(req,res)=>{
  const tenantId=req.integrationKey!.tenantId;
  const v=z.object({items:z.array(reminderPayloadSchema).min(1).max(50)}).strict().parse(req.body);
  const imported:any[]=[];
