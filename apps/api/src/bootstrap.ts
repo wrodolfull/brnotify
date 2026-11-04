@@ -1,4 +1,4 @@
-import 'dotenv/config';
+
 import {supabase} from './auth.js';
 import {query,pool} from './db.js';
 async function main(){

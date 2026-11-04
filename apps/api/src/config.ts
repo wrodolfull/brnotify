@@ -1,4 +1,8 @@
-import 'dotenv/config';
+import dotenv from 'dotenv';
+import {dirname,resolve} from 'node:path';
+import {fileURLToPath} from 'node:url';
+// Suporta npm workspaces e execução do código compilado, lendo somente a .env da raiz.
+dotenv.config({path:resolve(dirname(fileURLToPath(import.meta.url)),'../../../.env')});
 import { z } from 'zod';
 
 const envSchema = z.object({
