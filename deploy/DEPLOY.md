@@ -5,7 +5,7 @@ Node.js 22+, npm, Git, Nginx, PM2, projeto Supabase e conta GoTo com WhatsApp ha
 
 ## 1. Supabase
 - Crie projeto dedicado.
-- Execute database/001_init.sql e database/002_rebuild_queue.sql pelo SQL Editor, nesta ordem.
+- Execute database/001_init.sql, database/002_rebuild_queue.sql e database/003_public_integrations.sql pelo SQL Editor, nesta ordem.
 - Em Authentication, configure URL de produção, e-mail SMTP para convites e desative cadastro público.
 - Obtenha Project URL, anon key, service_role key e connection string PostgreSQL.
 - Use certificado de CA correto para conexão PostgreSQL; não desative validação TLS.
@@ -72,3 +72,9 @@ renovação OAuth, recebimento de webhook e comportamento após reinício do wor
 
 Os segredos nunca devem ser enviados ao GitHub. Configure backup do Supabase e retenção de logs.
 O projeto não foi validado contra uma conta GoTo de produção; são necessárias credenciais reais.
+
+## Integrações CRM/ERP
+
+Após configurar a conta GoTo e o webhook de entrada, acesse **API e Integrações** no menu do Administrador. Crie uma chave com escopos mínimos e guarde o valor apresentado uma única vez. Cadastre URLs de webhook HTTPS público com porta 443 e configure assinatura HMAC no CRM receptor. Execute testes de autenticação, opt-out, idempotência de agendamento, reagendamento e entrega de webhook antes de produção.
+
+Leia o guia [API Pública](../docs/PUBLIC_API.md) para contratos e exemplos.
