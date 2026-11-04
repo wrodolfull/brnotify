@@ -120,12 +120,60 @@ router.delete('/api/members/:id',tenant(true),requireSuper,wrap(async(req,res)=>
 router.get('/api/dashboard',tenant(),wrap(async(req,res)=>{
  const t=req.tenantId!;
  const counts=await query("select count(*) filter(where status='scheduled')::int as scheduled,count(*) filter(where status='processing')::int as processing,count(*) filter(where status='sent')::int as sent,count(*) filter(where status='delivered')::int as delivered,count(*) filter(where status='failed')::int as failed,count(*) filter(where status='unknown')::int as unknown from scheduled_messages where tenant_id=$1",[t]);
- const [contacts,events,recent]=await Promise.all([
+ const [contacts,events,recent,trend,upcoming]=await Promise.all([
   query('select count(*)::int n from contacts where tenant_id=$1',[t]),
   query("select count(*)::int n from events where tenant_id=$1 and status='scheduled' and starts_at>now()",[t]),
-  query("select m.id,m.status,m.scheduled_at,m.error_description,c.name,e.title from scheduled_messages m join events e on e.id=m.event_id and e.tenant_id=m.tenant_id join contacts c on c.id=e.contact_id and c.tenant_id=m.tenant_id where m.tenant_id=$1 order by m.updated_at desc limit 8",[t])
+  query("select m.id,m.status,m.scheduled_at,m.error_description,c.name,e.title from scheduled_messages m join events e on e.id=m.event_id and e.tenant_id=m.tenant_id join contacts c on c.id=e.contact_id and c.tenant_id=m.tenant_id where m.tenant_id=$1 order by m.updated_at desc limit 8",[t]),
+  // Agregação por dia local do ambiente. Retorna 14 pontos, mesmo em dias sem movimentação.
+  query(`
+    with zone as (select timezone from tenants where id=$1),
+    days as (
+      select generate_series(
+        ((now() at time zone z.timezone)::date - 13)::timestamp,
+        ((now() at time zone z.timezone)::date)::timestamp,
+        interval '1 day'
+      )::date as day from zone z
+    ),
+    accepted as (
+      select (m.sent_at at time zone t.timezone)::date day, count(*)::int total
+      from scheduled_messages m join tenants t on t.id=m.tenant_id
+      where m.tenant_id=$1 and m.sent_at>=now()-interval '15 days'
+      group by 1
+    ),
+    delivered as (
+      select (m.updated_at at time zone t.timezone)::date day, count(*)::int total
+      from scheduled_messages m join tenants t on t.id=m.tenant_id
+      where m.tenant_id=$1 and m.status='delivered' and m.updated_at>=now()-interval '15 days'
+      group by 1
+    ),
+    failed as (
+      select (m.updated_at at time zone t.timezone)::date day, count(*)::int total
+      from scheduled_messages m join tenants t on t.id=m.tenant_id
+      where m.tenant_id=$1 and m.status='failed' and m.updated_at>=now()-interval '15 days'
+      group by 1
+    )
+    select to_char(d.day,'YYYY-MM-DD') day,
+      coalesce(a.total,0)::int sent,
+      coalesce(v.total,0)::int delivered,
+      coalesce(f.total,0)::int failed
+    from days d left join accepted a on a.day=d.day
+    left join delivered v on v.day=d.day
+    left join failed f on f.day=d.day
+    order by d.day asc
+  `,[t]),
+  query(`
+    select m.id,m.scheduled_at,c.name,e.title
+    from scheduled_messages m
+    join events e on e.id=m.event_id and e.tenant_id=m.tenant_id
+    join contacts c on c.id=e.contact_id and c.tenant_id=m.tenant_id
+    where m.tenant_id=$1 and m.status='scheduled' and m.scheduled_at>=now()
+    order by m.scheduled_at asc limit 5
+  `,[t])
  ]);
- res.json({messages:counts.rows[0],contacts:contacts.rows[0].n,events:events.rows[0].n,recent:recent.rows});
+ res.json({
+  messages:counts.rows[0],contacts:contacts.rows[0].n,events:events.rows[0].n,
+  recent:recent.rows,trend:trend.rows,upcoming:upcoming.rows
+ });
 }));
 router.get('/api/contacts',tenant(),wrap(async(req,res)=>{
  const p=pageParams(req.query.page),search=String(req.query.q||'').trim().slice(0,100);
