@@ -85,6 +85,8 @@ create table if not exists goto_connections (
   principal text,
   account_key text,
   from_touchpoint text,
+  notification_channel_id text,
+  notification_subscription_id text,
   updated_at timestamptz not null default now()
 );
 create unique index if not exists goto_account_key_idx on goto_connections(account_key) where account_key is not null;

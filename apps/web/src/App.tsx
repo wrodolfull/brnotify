@@ -33,10 +33,15 @@ function Workspace({session}:{session:Session}){
  const refresh=useCallback(async()=>{
   const me=await callAPI(session,'/api/me','');
   const list=await callAPI(session,'/api/tenants','');
-  setActor(me);setTenants(list.items||[]);
-  const saved=localStorage.getItem('brnotify.tenant')||'';
-  const selected=(list.items||[]).find((x:any)=>(x.id||x.tenant_id)===(tenantId||saved));
-  if(!selected&&list.items?.length){const id=list.items[0].id||list.items[0].tenant_id;setTenantId(id);localStorage.setItem('brnotify.tenant',id)}
+  const items=[...(list.items||[])];
+  const saved=tenantId||localStorage.getItem('brnotify.tenant')||'';
+  if(saved&&!items.some((x:any)=>(x.id||x.tenant_id)===saved)){
+   try{const extra=await callAPI(session,'/api/tenants/'+encodeURIComponent(saved),'');items.push({...extra,role:me.memberships.find((m:any)=>m.tenant_id===saved)?.role})}catch{}
+  }
+  setActor(me);setTenants(items);
+  if(!items.some((x:any)=>(x.id||x.tenant_id)===saved)&&items.length){
+   const id=items[0].id||items[0].tenant_id;setTenantId(id);localStorage.setItem('brnotify.tenant',id)
+  }else if(saved){setTenantId(saved)}
  },[session,tenantId]);
  useEffect(()=>{let alive=true;setBusy(true);refresh().then(()=>{if(alive)setFatal('')}).catch(e=>{if(alive)setFatal(e.message)}).finally(()=>{if(alive)setBusy(false)});return()=>{alive=false}},[session]);
  useEffect(()=>{setMenuOpen(false)},[location.pathname]);
@@ -47,8 +52,8 @@ function Workspace({session}:{session:Session}){
  const segment=selected?.segment||actor?.memberships.find(m=>m.tenant_id===tenantId)?.segment||'custom';
  const isSuper=!!actor?.superAdmin;
  const role=isSuper?'admin':(selected?.role||actor?.memberships.find(m=>m.tenant_id===tenantId)?.role||'viewer');
- const ctx=useMemo(()=>actor?{actor,tenantId,tenantName,segment,role:role as 'admin'|'viewer',isSuper,api,notify,refresh}:null,[actor,tenantId,tenantName,segment,role,isSuper,api,notify,refresh]);
- const changeTenant=(id:string)=>{setTenantId(id);localStorage.setItem('brnotify.tenant',id);navigate('/');setMenuOpen(false)};
+ const changeTenant=useCallback((id:string)=>{setTenantId(id);localStorage.setItem('brnotify.tenant',id);navigate('/');setMenuOpen(false)},[navigate]);
+ const ctx=useMemo(()=>actor?{actor,tenantId,tenantName,segment,role:role as 'admin'|'viewer',isSuper,api,selectTenant:changeTenant,notify,refresh}:null,[actor,tenantId,tenantName,segment,role,isSuper,api,changeTenant,notify,refresh]);
  if(busy)return <Loader/>;
  if(fatal)return <div className="error-full"><h2>Acesso indisponível</h2><p>{fatal}</p><Button onClick={()=>supabase.auth.signOut()}>Sair</Button></div>;
  if(!ctx)return null;

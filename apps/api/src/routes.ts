@@ -68,6 +68,13 @@ router.get('/api/tenants',wrap(async(req,res)=>{
  const total=await query('select count(*)::int as total from tenants');
  res.json({items:result.rows,total:total.rows[0].total,page:p.page,pages:Math.ceil(total.rows[0].total/20)});
 }));
+router.get('/api/tenants/:id',wrap(async(req,res)=>{
+ const id=uuid.parse(req.params.id);
+ if(!req.actor!.superAdmin&&!req.actor!.memberships.some(m=>m.tenant_id===id))return res.status(403).json({error:'Sem acesso ao ambiente'});
+ const found=await query('select id,name,slug,segment,timezone,status,created_at from tenants where id=$1',[id]);
+ if(!found.rowCount)return res.status(404).json({error:'Ambiente não encontrado'});
+ res.json(found.rows[0]);
+}));
 router.post('/api/tenants',requireSuper,wrap(async(req,res)=>{
  const input=z.object({name:str.min(2).max(120),segment:z.enum(['automotive','clinic','pet','custom']),timezone:str.default('America/Sao_Paulo')}).parse(req.body);
  const slug=makeSlug(input.name)+'-'+crypto.randomBytes(3).toString('hex');
@@ -246,7 +253,7 @@ router.patch('/api/templates/:id',tenant(true),activeTenant,wrap(async(req,res)=
  res.json(updated.rows[0]);
 }));
 router.get('/api/goto',tenant(),wrap(async(req,res)=>{
- const item=await query('select account_key,from_touchpoint,principal,expires_at,updated_at from goto_connections where tenant_id=$1',[req.tenantId]);
+ const item=await query('select account_key,from_touchpoint,principal,expires_at,notification_channel_id,notification_subscription_id,updated_at from goto_connections where tenant_id=$1',[req.tenantId]);
  res.json({connected:!!item.rowCount,...(item.rows[0]||{})});
 }));
 router.get('/api/goto/oauth/start',tenant(true),activeTenant,wrap(async(req,res)=>{
@@ -259,6 +266,19 @@ router.patch('/api/goto',tenant(true),activeTenant,wrap(async(req,res)=>{
  const saved=await query('update goto_connections set account_key=$2,from_touchpoint=$3,updated_at=now() where tenant_id=$1 returning account_key,from_touchpoint',[req.tenantId,input.account_key,input.from_touchpoint]);
  if(!saved.rowCount)return res.status(409).json({error:'Conecte a conta GoTo antes de salvar'});
  res.json(saved.rows[0]);
+}));
+router.post('/api/goto/notifications/subscribe',tenant(true),activeTenant,wrap(async(req,res)=>{
+ const channelId=z.string().regex(/^Webhook\.[A-Za-z0-9-]{20,100}$/).parse(req.body.channel_id);
+ const connection=await query('select account_key,from_touchpoint from goto_connections where tenant_id=$1',[req.tenantId]);
+ if(!connection.rowCount||!connection.rows[0].account_key)return res.status(409).json({error:'Configure a conta GoTo'});
+ const accountKey=connection.rows[0].account_key;
+ const {gotoRequest}=await import('./goto.js');
+ const result=await gotoRequest(req.tenantId!,'/messaging/v2/subscriptions',{
+  method:'POST',json:{accountKey,ownerEntity:accountKey,ownerEntityType:'ORGANIZATION',channelId,eventTypes:['INBOUND_MESSAGE','DELIVERY_STATUS']}
+ }) as {id?:string};
+ await query('update goto_connections set notification_channel_id=$2,notification_subscription_id=$3,updated_at=now() where tenant_id=$1',[req.tenantId,channelId,result.id||null]);
+ await audit(req.tenantId!,req.actor!.id,'goto.notifications_subscribed',{channelId});
+ res.status(201).json({id:result.id||null,channelId});
 }));
 router.post('/api/goto/templates/sync',tenant(true),activeTenant,wrap(async(req,res)=>{
  const count=await syncTemplates(req.tenantId!);
