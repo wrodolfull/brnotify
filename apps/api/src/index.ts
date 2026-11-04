@@ -1,0 +1,27 @@
+import express,{type ErrorRequestHandler} from 'express';
+import cors from 'cors';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
+import {env} from './config.js';
+import {router} from './routes.js';
+import {pool} from './db.js';
+const app=express();
+app.disable('x-powered-by');
+app.set('trust proxy',1);
+app.use(helmet());
+app.use(cors({origin:env.WEB_URL,methods:['GET','POST','PUT','PATCH','DELETE'],allowedHeaders:['Authorization','Content-Type','x-tenant-id']}));
+app.use(express.json({limit:'1mb'}));
+app.use(rateLimit({windowMs:60_000,limit:180,standardHeaders:'draft-7',legacyHeaders:false}));
+app.use(router);
+app.use((req,res)=>res.status(404).json({error:'Rota não encontrada'}));
+const errorHandler:ErrorRequestHandler=(err,_req,res,_next)=>{
+ if(err?.name==='ZodError')return void res.status(422).json({error:'Dados inválidos',details:err.issues});
+ if(err?.code==='23505')return void res.status(409).json({error:'Registro duplicado'});
+ if(err?.code==='23503')return void res.status(422).json({error:'Referência inválida'});
+ if(err?.code==='LIMIT_FILE_SIZE')return void res.status(413).json({error:'Planilha excede 5 MB'});
+ console.error('[API]',err instanceof Error?err.message:'Erro inesperado');
+ res.status(500).json({error:env.NODE_ENV==='production'?'Erro interno':err?.message||'Erro interno'});
+};
+app.use(errorHandler);
+const server=app.listen(env.PORT,()=>console.log('BR Notify API ativa na porta '+env.PORT));
+process.on('SIGTERM',()=>{server.close(()=>pool.end())});

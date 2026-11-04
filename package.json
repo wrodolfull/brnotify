@@ -1,0 +1,21 @@
+{
+  "name": "brnotify",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/api",
+    "apps/web"
+  ],
+  "scripts": {
+    "dev:api": "npm run dev -w @brnotify/api",
+    "dev:worker": "npm run worker:dev -w @brnotify/api",
+    "dev:web": "npm run dev -w @brnotify/web",
+    "build": "npm run build -w @brnotify/api && npm run build -w @brnotify/web",
+    "start:api": "npm run start -w @brnotify/api",
+    "start:worker": "npm run worker -w @brnotify/api",
+    "typecheck": "npm run typecheck -w @brnotify/api && npm run typecheck -w @brnotify/web"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
