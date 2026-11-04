@@ -1,6 +1,8 @@
 import {DateTime} from 'luxon';
 import {query} from './db.js';
 import {buildTemplatePayload,ProviderError,sendTemplate} from './goto.js';
+import {registerIncomingDecision} from './confirmation.js';
+import {phoneE164} from './time.js';
 
 export async function processMessages(){
  const claimed=await query(
@@ -56,9 +58,11 @@ export async function handleGotoWebhook(event:any){
   const p=event.content.payload;
   const text=String(p.body||'').trim().toUpperCase();
   if(['STOP','SAIR','PARAR','CANCELAR','DESCADASTRAR'].includes(text)){
-   const author=String(p.authorTouchpoint||'');
+   let author='';try{author=phoneE164(p.authorTouchpoint)}catch{}
    const ct=await query("update contacts set consent=false,opted_out_at=now(),updated_at=now() where tenant_id=$1 and phone=$2 returning id",[tenantId,author]);
    for(const c of ct.rows)await query("update scheduled_messages set status='cancelled',updated_at=now() where tenant_id=$1 and event_id in(select id from events where tenant_id=$1 and contact_id=$2) and status='scheduled'",[tenantId,c.id]);
+  }else{
+   await registerIncomingDecision(tenantId,event.id,p);
   }
  }
  if(event.type==='DELIVERY_STATUS'){
