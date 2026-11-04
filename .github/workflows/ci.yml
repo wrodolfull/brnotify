@@ -37,5 +37,9 @@ jobs:
         env:
           CI_DATABASE_URL: postgresql://postgres:test@127.0.0.1:5432/brnotify_ci
         run: node apps/api/scripts/db-smoke.mjs
+      - name: Report SQL integration test
+        env:
+          CI_DATABASE_URL: postgresql://postgres:test@127.0.0.1:5432/brnotify_ci
+        run: npx tsx apps/api/scripts/report-smoke.ts
       - name: Build
         run: npm run build

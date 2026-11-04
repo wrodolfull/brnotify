@@ -1,0 +1,40 @@
+import assert from 'node:assert/strict';
+import {DateTime} from 'luxon';
+
+const db=process.env.CI_DATABASE_URL;
+if(!db||!db.includes('127.0.0.1'))throw new Error('Use apenas o PostgreSQL local de CI');
+process.env.NODE_ENV='test';
+process.env.DATABASE_URL=db;
+process.env.SUPABASE_URL='https://example.supabase.co';
+process.env.SUPABASE_SERVICE_ROLE_KEY='placeholder-test-key';
+process.env.TOKEN_ENCRYPTION_KEY='0'.repeat(64);
+const {query,pool}=await import('../src/db.js');
+const {reportSummary,loadActivities,countActivities}=await import('../src/reports.js');
+try{
+ const tenant=await query("select id,timezone from tenants where slug='teste-ci'");
+ assert.ok(tenant.rowCount,'Usuário de teste do db-smoke ausente');
+ const tenantId=tenant.rows[0].id;
+ const zone=tenant.rows[0].timezone;
+ const start=DateTime.now().setZone(zone).startOf('day').toUTC().toISO()!;
+ const end=DateTime.now().setZone(zone).plus({days:40}).startOf('day').toUTC().toISO()!;
+ const summary=await reportSummary(tenantId,start,end,zone,'day');
+ assert.ok(summary.messages.total>=1,'Mensagem não apareceu no relatório');
+ assert.ok(summary.appointments.total>=1,'Evento não apareceu no relatório');
+ assert.ok(summary.confirmations.confirmed>=1,'Confirmação não apareceu no relatório');
+ assert.ok(summary.webhooks.total>=2,'Webhooks não apareceram no relatório');
+ const base={tenantId,start,end,kind:'all',status:'all',search:''};
+ const items=await loadActivities(base,20,0);
+ const total=await countActivities(base);
+ assert.ok(items.rowCount && total>=items.rowCount,'Atividade e paginação inconsistentes');
+ assert.ok(items.rows.some(x=>x.kind==='message'));
+ assert.ok(items.rows.some(x=>x.kind==='appointment'));
+ assert.ok(items.rows.some(x=>x.kind==='confirmation'));
+ assert.ok(items.rows.some(x=>x.kind==='webhook'));
+ const onlyMessages=await loadActivities({...base,kind:'message'},20,0);
+ assert.ok(onlyMessages.rows.every(x=>x.kind==='message'),'Filtro de origem incorreto');
+ const searched=await loadActivities({...base,search:'REV-CI-1'},20,0);
+ assert.ok(searched.rows.some(x=>x.external_id==='REV-CI-1'),'Busca por ID externo incorreta');
+ const wrongTenant=await loadActivities({...base,tenantId:'00000000-0000-4000-8000-000000000000'},20,0);
+ assert.equal(wrongTenant.rows.length,0,'Violação de isolamento por tenant');
+ console.log('Relatório: métricas, tendências, histórico, filtros e isolamento por ambiente aprovados');
+}finally{await pool.end()}

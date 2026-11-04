@@ -96,7 +96,7 @@ async function context(req:import('express').Request){
  catch(err){throw new ApiOperationError(422,err instanceof Error?err.message:'Período inválido')}
  return {tenantId,filter:parsed,period,tenantName:t.rows[0].name as string};
 }
-async function loadActivities(f:FilterArgs,limit:number,offset:number){
+export async function loadActivities(f:FilterArgs,limit:number,offset:number){
  const bind=params(f);
  return query(
   ACTIVITY_CTE+'select a.* from activity a '+FILTER_CLAUSE+
@@ -104,14 +104,14 @@ async function loadActivities(f:FilterArgs,limit:number,offset:number){
   [...bind,limit,offset]
  );
 }
-async function countActivities(f:FilterArgs){
+export async function countActivities(f:FilterArgs){
  const result=await query(
   ACTIVITY_CTE+'select count(*)::int total from activity a '+FILTER_CLAUSE,
   params(f)
  );
  return result.rows[0].total as number;
 }
-async function reportSummary(tenantId:string,start:string,end:string,zone:string,bucket:'day'|'week'|'month'){
+export async function reportSummary(tenantId:string,start:string,end:string,zone:string,bucket:'day'|'week'|'month'){
  const common=[tenantId,start,end];
  const [messages,appointments,confirmations,contacts,imports,webhooks,api,errors,trend]=await Promise.all([
   query([
