@@ -21,7 +21,7 @@ export type ReportFilter=z.infer<typeof reportFilterSchema>;
 export type ReportWindow={
  from:string;to:string;startISO:string;endISO:string;zone:string;bucket:'day'|'week'|'month'
 };
-export function reportWindow(input:Pick<ReportFilter,'from'|'to'>,zone:string,now=DateTime.now()):ReportWindow{
+export function reportWindow(input:Pick<ReportFilter,'from'|'to'>,zone:string,now:DateTime=DateTime.now()):ReportWindow{
  const today=now.setZone(zone).startOf('day');
  if(!today.isValid)throw new Error('Fuso horário do ambiente inválido');
  const end=input.to?DateTime.fromISO(input.to,{zone}).startOf('day'):today;

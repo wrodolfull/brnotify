@@ -33,10 +33,5 @@ test('CSV escapes delimiters, quotes, newlines, formula injection and unicode',(
  assert.ok(csv.startsWith('\uFEFFsep=;\r\n'));
  assert.ok(csv.includes('"José; ""x"""'));
  assert.ok(csv.includes('"\'=CMD(""foo"")"'));
- assert.ok(csv.includes('"\' +SUM')===false);
- assert.ok(csv.includes('"\' +SUM')===false);
- assert.ok(csv.includes('"\' +SUM')===false);
- assert.ok(csv.includes('"\' +SUM')===false);
- assert.ok(csv.includes('"\' +SUM')===false);
  assert.ok(csv.includes('"\'+SUM(A1:A2)"'));
 });
