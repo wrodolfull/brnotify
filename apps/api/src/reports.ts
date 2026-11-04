@@ -201,7 +201,7 @@ reportRouter.get('/',wrap(async(req,res)=>{
  const denominator=Number(messages.accepted||0);
  const deliveryRate=denominator?Math.round((Number(messages.delivered||0)/denominator)*1000)/10:null;
  res.json({
-  tenant:tenantName,period:{from:period.from,to:period.to,bucket:period.bucket},
+  tenant:tenantName,period:{from:period.from,to:period.to,bucket:period.bucket,zone:period.zone},
   ...counts,delivery_rate:deliveryRate,
   trend:fillTrend(counts.trend,period)
  });

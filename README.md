@@ -42,3 +42,7 @@ O módulo **API e Integrações** permite ao Administrador criar chaves por ambi
 - Documentação e exemplos: [API Pública](docs/PUBLIC_API.md)
 - Contrato OpenAPI disponível em `/v1/openapi.json`
 - Sem planos, cobrança ou criação pública de usuários.
+
+## Relatório unificado
+
+A tela **Relatório geral**, disponível para Administradores e Visualizadores, consolida notificações, falhas, confirmações e integrações com filtros e exportação CSV. Leia [Relatórios](docs/REPORTS.md).

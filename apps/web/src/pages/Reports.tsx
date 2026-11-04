@@ -11,7 +11,7 @@ import {fmtDate,fmtNum} from '../api';
 type Kind='all'|'message'|'appointment'|'confirmation'|'webhook'|'api'|'import';
 type ReportFilters={days:string;from:string;to:string;kind:Kind;status:string;q:string};
 type Summary={
- tenant:string;period:{from:string;to:string;bucket:'day'|'week'|'month'};
+ tenant:string;period:{from:string;to:string;bucket:'day'|'week'|'month';zone:string};
  messages:{total:number;scheduled:number;processing:number;sent:number;delivered:number;failed:number;unknown:number;cancelled:number;accepted:number;attempts:number};
  appointments:{total:number;scheduled:number;cancelled:number;completed:number;confirmation_enabled:number;pending:number};
  confirmations:{total:number;confirmed:number;reschedule_requested:number;declined:number;ambiguous:number;unmatched:number};
@@ -44,6 +44,11 @@ const statuses=[
 ] as const;
 const statusMap:Record<string,string>=Object.fromEntries(statuses.map(([key,value])=>[key,value]));
 const kindMap:Record<string,string>=Object.fromEntries(categories.map(o=>[o.value,o.label]));
+const reportDate=(value:string,zone?:string)=>{
+ const options:Intl.DateTimeFormatOptions={dateStyle:'short',timeStyle:'short'};
+ if(zone)options.timeZone=zone;
+ return new Date(value).toLocaleString('pt-BR',options);
+};
 const statusStyle=(status:string)=>{
  if(['delivered','confirmed','success','completed'].includes(status))return 'report-status-ok';
  if(['failed','dead','unknown','declined','ambiguous','unmatched'].includes(status))return 'report-status-bad';
@@ -235,7 +240,7 @@ export function Reports(){
    {activityLoading?<div className="report-activity-loading">Atualizando atividades...</div>:activities.items.length?
     <div className="report-table-scroll"><table className="report-table"><thead><tr><th>Data e hora</th><th>Origem</th><th>Contato / Integração</th><th>Atividade</th><th>Status</th><th>Detalhes</th></tr></thead><tbody>
      {activities.items.map(item=><tr key={item.kind+'-'+item.id}>
-      <td className="report-date-cell">{fmtDate(item.occurred_at,true)}</td>
+      <td className="report-date-cell">{reportDate(item.occurred_at,summary?.period.zone)}</td>
       <td><span className="report-source">{kindMap[item.kind]||item.kind}</span></td>
       <td><strong>{item.subject||'—'}</strong>{item.external_id&&<small>ID: {item.external_id}</small>}</td>
       <td><strong>{item.title}</strong></td>
