@@ -53,7 +53,10 @@ export async function handleGotoWebhook(event:any){
  if(!tenant.rowCount)return false;
  const tenantId=tenant.rows[0].tenant_id;
  const inserted=await query('insert into webhook_events(event_id,tenant_id,payload) values($1,$2,$3) on conflict do nothing returning event_id',[event.id,tenantId,JSON.stringify(event)]);
- if(!inserted.rowCount)return true;
+ if(!inserted.rowCount){
+  const old=await query('select processed_at from webhook_events where event_id=$1',[event.id]);
+  if(old.rows[0]?.processed_at)return true;
+ }
  if(event.type==='INBOUND_MESSAGE'&&event.content.payload?.channel==='WHATSAPP'){
   const p=event.content.payload;
   const text=String(p.body||'').trim().toUpperCase();
@@ -67,7 +70,10 @@ export async function handleGotoWebhook(event:any){
  }
  if(event.type==='DELIVERY_STATUS'){
   const payload=event.content.payload||{};
-  if(typeof payload.messageId!=='string')return true;
+  if(typeof payload.messageId!=='string'){
+   await query('update webhook_events set processed_at=now() where event_id=$1',[event.id]);
+   return true;
+  }
   const description=String(payload.deliveryStatus?.description||'UNKNOWN');
   const code=String(payload.deliveryStatus?.code||'');
   const status=description==='DELIVERED'?'delivered':code.startsWith('4')||code.startsWith('5')?'failed':'sent';
@@ -76,5 +82,6 @@ export async function handleGotoWebhook(event:any){
    [status,code,description,tenantId,payload.messageId]
   );
  }
+ await query('update webhook_events set processed_at=now() where event_id=$1',[event.id]);
  return true;
 }
