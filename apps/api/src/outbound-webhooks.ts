@@ -87,7 +87,7 @@ export const sendWebhook:OutboundTransport=async(urlString,body,secret,eventId,d
 };
 export async function processOutboundWebhooks(transport:OutboundTransport=sendWebhook){
  const claimed=await query(
-  "with due as (select d.id from outbound_webhook_deliveries d join outbound_webhook_endpoints e on e.id=d.endpoint_id and e.tenant_id=d.tenant_id join tenants t on t.id=d.tenant_id where d.status='queued' and d.next_attempt_at<=now() and t.status='active' order by d.next_attempt_at,id for update of d skip locked limit 20) update outbound_webhook_deliveries d set status='processing',attempts=attempts+1,locked_at=now() from due where d.id=due.id returning d.*"
+  "with due as (select d.id from outbound_webhook_deliveries d join outbound_webhook_endpoints e on e.id=d.endpoint_id and e.tenant_id=d.tenant_id join tenants t on t.id=d.tenant_id where d.status='queued' and d.next_attempt_at<=now() and t.status='active' order by d.next_attempt_at,d.id for update of d skip locked limit 20) update outbound_webhook_deliveries d set status='processing',attempts=attempts+1,locked_at=now() from due where d.id=due.id returning d.*"
  );
  for(const row of claimed.rows){
   let status=0,reason='';

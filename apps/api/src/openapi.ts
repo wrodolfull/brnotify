@@ -367,7 +367,7 @@ export const openApiDefinition = {
           "Agendamentos"
         ],
         "summary": "Upsert completo: contato + registro + evento + até três lembretes",
-        "description": "Escopo events:write. external_id permite repetir a requisição sem duplicar eventos.",
+        "description": "Escopos events:write e contacts:write. external_id permite repetir a requisição sem duplicar eventos.",
         "requestBody": {
           "required": true,
           "content": {
@@ -469,7 +469,7 @@ export const openApiDefinition = {
           "Agendamentos"
         ],
         "summary": "Alias de POST /reminders",
-        "description": "Escopo events:write",
+        "description": "Escopos events:write e contacts:write",
         "requestBody": {
           "required": true,
           "content": {
@@ -659,7 +659,7 @@ export const openApiDefinition = {
           "Importações"
         ],
         "summary": "Importa lote JSON de até 50 eventos",
-        "description": "Escopo imports:write. A resposta 207 inclui sucesso parcial e erros por item.",
+        "description": "Escopos imports:write, events:write e contacts:write. A resposta 207 inclui sucesso parcial e erros por item.",
         "requestBody": {
           "required": true,
           "content": {
