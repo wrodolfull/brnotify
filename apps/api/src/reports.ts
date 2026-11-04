@@ -75,7 +75,7 @@ const FILTER_CLAUSE=[
  "or coalesce(a.external_id,'') ilike $7)"
 ].join(' ');
 function params(f:FilterArgs){
- const escaped=f.search.replace(/[\\%_]/g,'\\$&');
+ const escaped=f.search.replace(/[\\%_]/g,'\\ const escaped=f.search.replace(/[\\%_]/g,'\\$&');');
  return [f.tenantId,f.start,f.end,f.kind,f.status,f.search,'%'+escaped+'%'];
 }
 async function context(req:import('express').Request){
@@ -83,8 +83,16 @@ async function context(req:import('express').Request){
  const t=await query('select timezone,name from tenants where id=$1',[tenantId]);
  if(!t.rowCount)throw new ApiOperationError(404,'Ambiente não encontrado');
  const parsed=reportFilterSchema.parse(req.query);
+ if(parsed.days&&(parsed.from||parsed.to))
+  throw new ApiOperationError(422,'Utilize days ou from/to, não ambos');
+ const timezone=t.rows[0].timezone as string;
+ const localNow=DateTime.now().setZone(timezone);
+ const filterRange=parsed.days?{
+  from:localNow.minus({days:parsed.days-1}).toISODate()!,
+  to:localNow.toISODate()!
+ }:parsed;
  let period;
- try{period=reportWindow(parsed,t.rows[0].timezone)}
+ try{period=reportWindow(filterRange,timezone)}
  catch(err){throw new ApiOperationError(422,err instanceof Error?err.message:'Período inválido')}
  return {tenantId,filter:parsed,period,tenantName:t.rows[0].name as string};
 }

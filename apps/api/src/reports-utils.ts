@@ -13,6 +13,7 @@ export const reportFilterSchema=z.object({
  kind:z.enum(REPORT_KINDS).default('all'),
  status:z.enum(REPORT_STATUSES).default('all'),
  q:z.string().trim().max(80).default(''),
+ days:z.coerce.number().int().min(1).max(366).optional(),
  page:z.coerce.number().int().min(1).max(100000).default(1)
 }).strict();
 
@@ -25,8 +26,9 @@ export function reportWindow(input:Pick<ReportFilter,'from'|'to'>,zone:string,no
  if(!today.isValid)throw new Error('Fuso horário do ambiente inválido');
  const end=input.to?DateTime.fromISO(input.to,{zone}).startOf('day'):today;
  const start=input.from?DateTime.fromISO(input.from,{zone}).startOf('day'):end.minus({days:29});
- if(!start.isValid||!end.isValid||start.toISODate()!==input.from&&input.from!==undefined||
-  end.toISODate()!==input.to&&input.to!==undefined)
+ if(!start.isValid||!end.isValid||
+  (input.from!==undefined&&start.toISODate()!==input.from)||
+  (input.to!==undefined&&end.toISODate()!==input.to))
   throw new Error('Data inválida; utilize AAAA-MM-DD');
  const days=Math.round(end.diff(start,'days').days)+1;
  if(days<1||days>366)throw new Error('Selecione um período entre 1 e 366 dias');

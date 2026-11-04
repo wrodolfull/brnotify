@@ -9,7 +9,7 @@ Plataforma de lembretes multitenant por WhatsApp, com integração GoTo Messagin
 
 ## Instalação
 1. Requer Node.js 22+, Supabase (Auth + PostgreSQL) e uma organização GoTo com WhatsApp habilitado.
-2. Execute `database/001_init.sql`, `database/002_rebuild_queue.sql` e `database/003_public_integrations.sql`, nesta ordem, no SQL Editor do Supabase.
+2. Execute `database/001_init.sql`, `database/002_rebuild_queue.sql` e `database/003_public_integrations.sql` e `database/004_unified_reports.sql`, nesta ordem, no SQL Editor do Supabase.
 3. Copie `.env.example` para `.env` e configure os segredos apenas no servidor.
 4. Execute `npm install`.
 5. Execute `npm run bootstrap -w @brnotify/api` para criar o primeiro super administrador (requer BOOTSTRAP_EMAIL e BOOTSTRAP_PASSWORD; mínimo 12 caracteres).
