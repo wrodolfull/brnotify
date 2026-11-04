@@ -137,6 +137,7 @@ export async function saveReminder(tenantId:string,data:ReminderPayload){
   const old=await run('select * from events where tenant_id=$1 and external_id=$2 for update',[tenantId,data.external_id]);
   const contact=await upsertExternalContact(tenantId,data.contact,run);
   let recordId:string|null=old.rows[0]?.record_id||null;
+  if(old.rows[0]&&old.rows[0].contact_id!==contact.id)recordId=null;
   if(data.record){
    const row=data.record;
    const details:Record<string,unknown>={...(row.details||{})};

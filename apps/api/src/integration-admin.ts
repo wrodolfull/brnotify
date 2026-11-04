@@ -94,7 +94,7 @@ integrationAdminRouter.patch('/webhooks/:id',wrap(async(req,res)=>{
  const id=uuid.parse(req.params.id);
  const v=z.object({
   active:z.boolean().optional(),
-  event_types:z.array(z.enum(WEBHOOK_EVENT_TYPES)).min(1).optional()
+  event_types:z.array(z.enum(WEBHOOK_EVENT_TYPES)).min(1).max(WEBHOOK_EVENT_TYPES.length).refine(arr=>new Set(arr).size===arr.length).optional()
  }).refine(d=>Object.keys(d).length>0).parse(req.body);
  const row=await query(
   "update outbound_webhook_endpoints set active=coalesce($3,active),event_types=coalesce($4,event_types),updated_at=now() where tenant_id=$1 and id=$2 returning id,label,destination_url,active,event_types,updated_at",

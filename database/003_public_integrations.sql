@@ -180,6 +180,11 @@ begin
  return new;
 end;
 $$;
+-- RPC do Supabase não deve poder invocar funções SECURITY DEFINER.
+revoke all on function public.brnotify_queue_hook(uuid,text,jsonb) from public,anon,authenticated;
+revoke all on function public.brnotify_message_transition() from public,anon,authenticated;
+revoke all on function public.brnotify_event_transition() from public,anon,authenticated;
+
 drop trigger if exists brnotify_event_updated on events;
 create trigger brnotify_event_updated
 after update of confirmation_status,status on events
