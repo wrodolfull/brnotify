@@ -24,7 +24,7 @@ const contactInput=z.object({
 });
 const eventInput=z.object({
  contact_id:uuid,record_id:uuid.nullish(),title:str.min(2).max(160),event_type:str.max(100).optional(),
- starts_at:str.min(10),details:z.record(z.unknown()).optional(),reminder_overrides:z.record(z.unknown()).nullable().optional()
+ starts_at:str.min(10),confirmation_enabled:z.boolean().optional(),details:z.record(z.unknown()).optional(),reminder_overrides:z.record(z.unknown()).nullable().optional()
 });
 const ruleInput=z.array(z.object({
  slot:z.number().int().min(1).max(3),enabled:z.boolean(),offset_value:z.number().int().min(1).max(365),
@@ -238,8 +238,8 @@ router.post('/api/events',tenant(true),activeTenant,wrap(async(req,res)=>{
   if(!r.rowCount)return res.status(422).json({error:'Registro não pertence ao contato'});
  }
  const saved=await query(
-  'insert into events(tenant_id,contact_id,record_id,title,event_type,starts_at,details,reminder_overrides) values($1,$2,$3,$4,$5,$6,$7,$8) returning *',
-  [req.tenantId,input.contact_id,input.record_id||null,input.title,input.event_type||'reminder',toUTC(input.starts_at,t.rows[0].timezone),JSON.stringify(input.details||{}),input.reminder_overrides?JSON.stringify(input.reminder_overrides):null]
+  'insert into events(tenant_id,contact_id,record_id,title,event_type,starts_at,details,reminder_overrides,confirmation_enabled,confirmation_status) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) returning *',
+  [req.tenantId,input.contact_id,input.record_id||null,input.title,input.event_type||'reminder',toUTC(input.starts_at,t.rows[0].timezone),JSON.stringify(input.details||{}),input.reminder_overrides?JSON.stringify(input.reminder_overrides):null,input.confirmation_enabled??false,input.confirmation_enabled?'pending':'not_requested']
  );
  await rebuildEvent(req.tenantId!,saved.rows[0].id);
  await audit(req.tenantId!,req.actor!.id,'event.created',{id:saved.rows[0].id});
@@ -251,9 +251,13 @@ router.patch('/api/events/:id',tenant(true),activeTenant,wrap(async(req,res)=>{
  if(!old.rowCount)return res.status(404).json({error:'Evento não encontrado'});
  const t=await query('select timezone from tenants where id=$1',[req.tenantId]);
  const ev=old.rows[0];
+ const nextDate=input.starts_at?toUTC(input.starts_at,t.rows[0].timezone):ev.starts_at;
+ const changed=new Date(nextDate).getTime()!==new Date(ev.starts_at).getTime();
+ const enabled=input.confirmation_enabled??ev.confirmation_enabled;
+ const nextConfirmation=enabled?(changed||!ev.confirmation_enabled?'pending':ev.confirmation_status):'not_requested';
  const saved=await query(
-  'update events set title=$3,event_type=$4,starts_at=$5,status=$6,details=$7,reminder_overrides=$8,updated_at=now() where tenant_id=$1 and id=$2 returning *',
-  [req.tenantId,ev.id,input.title??ev.title,input.event_type??ev.event_type,input.starts_at?toUTC(input.starts_at,t.rows[0].timezone):ev.starts_at,input.status??ev.status,JSON.stringify(input.details??ev.details),input.reminder_overrides===undefined?ev.reminder_overrides:JSON.stringify(input.reminder_overrides)]
+  'update events set title=$3,event_type=$4,starts_at=$5,status=$6,details=$7,reminder_overrides=$8,confirmation_enabled=$9,confirmation_status=$10,confirmation_received_at=case when $11 then null else confirmation_received_at end,schedule_revision=schedule_revision+case when $11 then 1 else 0 end,updated_at=now() where tenant_id=$1 and id=$2 returning *',
+  [req.tenantId,ev.id,input.title??ev.title,input.event_type??ev.event_type,nextDate,input.status??ev.status,JSON.stringify(input.details??ev.details),input.reminder_overrides===undefined?ev.reminder_overrides:JSON.stringify(input.reminder_overrides),enabled,nextConfirmation,changed]
  );
  await rebuildEvent(req.tenantId!,ev.id);await audit(req.tenantId!,req.actor!.id,'event.updated',{id:ev.id});
  res.json(saved.rows[0]);

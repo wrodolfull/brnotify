@@ -5,6 +5,9 @@ import {BlockList,isIP} from 'node:net';
 import {query} from './db.js';
 import {decrypt} from './goto.js';
 
+export class WebhookConfigurationError extends Error {
+ constructor(message:string){super(message)}
+}
 export const WEBHOOK_EVENT_TYPES=[
  'reminder.sent','reminder.delivered','reminder.failed',
  'event.cancelled','appointment.confirmed',
@@ -31,20 +34,20 @@ export function isSafePublicAddress(address:string,family:4|6):boolean{
 export function parseWebhookUrl(input:string):URL{
  const u=new URL(input);
  if(u.protocol!=='https:'||u.port&&u.port!=='443'||u.username||u.password||u.hash)
-  throw new Error('O webhook exige HTTPS, porta 443 e URL sem credenciais ou fragmento');
+  throw new WebhookConfigurationError('O webhook exige HTTPS, porta 443 e URL sem credenciais ou fragmento');
  const host=u.hostname.toLowerCase();
  if(!host.includes('.')||host==='localhost'||host.endsWith('.localhost')
   ||host.endsWith('.local')||host.endsWith('.internal')||host.endsWith('.test')
   ||host.endsWith('.invalid')||isIP(host))
-  throw new Error('Use um hostname público, nunca IP local ou domínio interno');
- if(u.href.length>1024)throw new Error('URL muito longa');
+  throw new WebhookConfigurationError('Use um hostname público, nunca IP local ou domínio interno');
+ if(u.href.length>1024)throw new WebhookConfigurationError('URL muito longa');
  return u;
 }
 export async function assertSafeWebhookUrl(input:string){
  const url=parseWebhookUrl(input);
  const ips=await dns.lookup(url.hostname,{all:true,verbatim:true});
  if(!ips.length || !ips.every(v=>isSafePublicAddress(v.address,v.family as 4|6)))
-  throw new Error('O DNS do webhook deve resolver somente para endereços públicos');
+  throw new WebhookConfigurationError('O DNS do webhook deve resolver somente para endereços públicos');
  return {url,address:ips[0].address,family:ips[0].family as 4|6};
 }
 export function signWebhook(secret:string,timestamp:string,json:string){

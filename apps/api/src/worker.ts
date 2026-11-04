@@ -1,6 +1,7 @@
 import {pool,query} from './db.js';
 import {processMessages} from './scheduler.js';
 import {rebuildEvent} from './time.js';
+import {processOutboundWebhooks,reclaimOutboundAfterCrash} from './outbound-webhooks.js';
 
 let running=true;
 const sleep=(ms:number)=>new Promise(resolve=>setTimeout(resolve,ms));
@@ -22,6 +23,8 @@ async function tick(){
  await query("update scheduled_messages set status='unknown',error_description='Resultado indeterminado após interrupção do worker',locked_at=null,updated_at=now() where status='processing' and locked_at<now()-interval '3 minutes'");
  await rebuildRules();
  await processMessages();
+ await reclaimOutboundAfterCrash();
+ await processOutboundWebhooks();
 }
 async function main(){
  console.log('BR Notify worker iniciado');
