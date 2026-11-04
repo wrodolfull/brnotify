@@ -97,10 +97,10 @@ publicApiRouter.get('/messages',requireScope('messages:read'),wrap(async(req,res
  const tenantId=req.integrationKey!.tenantId,p=pageParams(req.query.page);
  const ref=req.query.external_id?externalIdSchema.parse(req.query.external_id):null;
  const [items,count]=await Promise.all([
-  query(\`select m.id,m.slot,m.scheduled_at,m.status,m.sent_at,m.error_code,e.external_id
+  query(`select m.id,m.slot,m.scheduled_at,m.status,m.sent_at,m.error_code,e.external_id
    from scheduled_messages m join events e on e.id=m.event_id and e.tenant_id=m.tenant_id
    where m.tenant_id=$1 and ($2::text is null or e.external_id=$2)
-   order by m.scheduled_at desc limit 20 offset $3\`,[tenantId,ref,p.offset]),
+   order by m.scheduled_at desc limit 20 offset $3`,[tenantId,ref,p.offset]),
   query('select count(*)::int total from scheduled_messages m join events e on e.id=m.event_id and e.tenant_id=m.tenant_id where m.tenant_id=$1 and ($2::text is null or e.external_id=$2)',[tenantId,ref])
  ]);
  res.json({items:items.rows,total:count.rows[0].total,page:p.page,pages:Math.ceil(count.rows[0].total/20)});

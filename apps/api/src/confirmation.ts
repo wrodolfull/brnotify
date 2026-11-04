@@ -32,7 +32,7 @@ export async function registerIncomingDecision(tenantId:string,providerEventId:s
   // Nunca pressupor que uma resposta é do agendamento mais recente se há ambiguidade.
   // O envio anterior deve ser um lembrete real e recente, não somente um cadastro.
   const candidates=await client.query(
-   \`select distinct e.id
+   `select distinct e.id
     from events e join scheduled_messages m
       on m.event_id=e.id and m.tenant_id=e.tenant_id
     where e.tenant_id=$1 and e.contact_id=$2
@@ -40,7 +40,7 @@ export async function registerIncomingDecision(tenantId:string,providerEventId:s
       and e.status='scheduled' and e.starts_at>now()
       and m.sent_at>=now()-interval '7 days'
       and m.goto_message_id is not null
-    order by e.id limit 2\`,
+    order by e.id limit 2`,
    [tenantId,contactId]
   );
   const resolution=candidates.rowCount===1?'matched':candidates.rowCount===0?'no_matching_event':'ambiguous';

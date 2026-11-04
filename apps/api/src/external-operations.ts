@@ -101,7 +101,7 @@ export async function upsertExternalContact(
  if(old.opted_out_at&&body.consent===true)
   throw new ApiOperationError(409,'Contato com opt-out: requer novo consentimento validado no painel');
  const update=await run(
-  \`update contacts set
+  `update contacts set
     external_id=coalesce($3,external_id),
     name=$4,phone=$5,email=coalesce($6,email),
     consent=case when $7::boolean=false then false when opted_out_at is not null then false when $7::boolean=true and $8::text is not null then true else consent end,
@@ -110,7 +110,7 @@ export async function upsertExternalContact(
     opted_out_at=case when $7::boolean=false then coalesce(opted_out_at,now()) else opted_out_at end,
     custom_data=case when $9::jsonb is null then custom_data else $9::jsonb end,
     updated_at=now()
-   where tenant_id=$1 and id=$2 returning *\`,
+   where tenant_id=$1 and id=$2 returning *`,
   [tenantId,old.id,body.external_id||null,body.name,phone,body.email||null,
    body.consent??null,body.consent_source||null,body.custom_data?JSON.stringify(body.custom_data):null]
  );
@@ -143,11 +143,11 @@ export async function saveReminder(tenantId:string,data:ReminderPayload){
    const label=row.label||String(details.model||details.pet_name||data.event.title).slice(0,180);
    if(row.external_id){
     const saved=await run(
-     \`insert into records(tenant_id,contact_id,external_id,label,kind,details)
+     `insert into records(tenant_id,contact_id,external_id,label,kind,details)
       values($1,$2,$3,$4,$5,$6)
       on conflict(tenant_id,contact_id,external_id) where external_id is not null
       do update set label=excluded.label,kind=excluded.kind,details=excluded.details
-      returning id\`,
+      returning id`,
      [tenantId,contact.id,row.external_id,label,row.type,JSON.stringify(details)]
     );
     recordId=saved.rows[0].id;
@@ -178,12 +178,12 @@ export async function saveReminder(tenantId:string,data:ReminderPayload){
     ?changed||!previous.confirmation_enabled?'pending':previous.confirmation_status
     :'not_requested';
    const saved=await run(
-    \`update events set
+    `update events set
       contact_id=$3,record_id=$4,title=$5,event_type=$6,starts_at=$7,details=$8,
       reminder_overrides=$9,confirmation_enabled=$10,confirmation_status=$11,
       confirmation_received_at=case when $12 then null else confirmation_received_at end,
       schedule_revision=$13,status='scheduled',updated_at=now()
-     where tenant_id=$1 and id=$2 returning *\`,
+     where tenant_id=$1 and id=$2 returning *`,
     [tenantId,previous.id,contact.id,recordId,data.event.title,data.event.type,
      startsAt,details,overrides===null?previous.reminder_overrides:JSON.stringify(overrides),
      confEnabled,confirmationStatus,changed,revision]
@@ -191,10 +191,10 @@ export async function saveReminder(tenantId:string,data:ReminderPayload){
    event=saved.rows[0];
   }else{
    const inserted=await run(
-    \`insert into events(
+    `insert into events(
       tenant_id,external_id,contact_id,record_id,title,event_type,starts_at,details,
       reminder_overrides,confirmation_enabled,confirmation_status
-     )values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) returning *\`,
+     )values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) returning *`,
     [tenantId,data.external_id,contact.id,recordId,data.event.title,data.event.type,
      startsAt,details,overrides?JSON.stringify(overrides):null,
      confEnabled,confEnabled?'pending':'not_requested']
@@ -209,11 +209,11 @@ export async function saveReminder(tenantId:string,data:ReminderPayload){
 }
 export async function getExternalEvent(tenantId:string,externalId:string){
  const r=await query(
-  \`select e.id,e.external_id,e.title,e.event_type,e.starts_at,e.status,
+  `select e.id,e.external_id,e.title,e.event_type,e.starts_at,e.status,
     e.confirmation_enabled,e.confirmation_status,e.confirmation_received_at,
     e.schedule_revision,c.id contact_id,c.name contact_name,c.phone
    from events e join contacts c on c.id=e.contact_id and c.tenant_id=e.tenant_id
-   where e.tenant_id=$1 and e.external_id=$2\`,
+   where e.tenant_id=$1 and e.external_id=$2`,
   [tenantId,externalId]
  );
  if(!r.rowCount)throw new ApiOperationError(404,'Agendamento não encontrado');
@@ -249,10 +249,10 @@ export async function patchExternalEvent(tenantId:string,externalId:string,input
    ?changed||!ev.confirmation_enabled?'pending':ev.confirmation_status
    :'not_requested';
   const updated=await run(
-   \`update events set starts_at=$3,title=$4,confirmation_enabled=$5,
+   `update events set starts_at=$3,title=$4,confirmation_enabled=$5,
     confirmation_status=$6,confirmation_received_at=case when $7 then null else confirmation_received_at end,
     schedule_revision=schedule_revision+case when $7 then 1 else 0 end,updated_at=now()
-    where tenant_id=$1 and id=$2 returning *\`,
+    where tenant_id=$1 and id=$2 returning *`,
    [tenantId,ev.id,startsAt,input.title??ev.title,enabled,conf,changed]
   );
   await rebuildEvent(tenantId,ev.id,run);
