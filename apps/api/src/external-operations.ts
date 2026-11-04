@@ -87,6 +87,7 @@ export async function upsertExternalContact(
   :body.external_id
   ?await run('select * from contacts where tenant_id=$1 and external_id=$2 for update',[tenantId,body.external_id])
   :await run('select * from contacts where tenant_id=$1 and phone=$2 for update',[tenantId,phone]);
+ if(forcedId&&!existing.rowCount)throw new ApiOperationError(404,'Contato não encontrado');
  const fallback=existing.rowCount?existing:
   await run('select * from contacts where tenant_id=$1 and phone=$2 for update',[tenantId,phone]);
  const old=fallback.rows[0];
@@ -214,8 +215,9 @@ export async function getExternalEvent(tenantId:string,externalId:string){
  const r=await query(
   `select e.id,e.external_id,e.title,e.event_type,e.starts_at,e.status,
     e.confirmation_enabled,e.confirmation_status,e.confirmation_received_at,
-    e.schedule_revision,c.id contact_id,c.name contact_name,c.phone
+    e.schedule_revision,c.id contact_id,c.name contact_name,c.phone,r.id record_id,r.label record_label,r.kind record_type,r.details record_details
    from events e join contacts c on c.id=e.contact_id and c.tenant_id=e.tenant_id
+   left join records r on r.id=e.record_id and r.tenant_id=e.tenant_id
    where e.tenant_id=$1 and e.external_id=$2`,
   [tenantId,externalId]
  );

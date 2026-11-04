@@ -45,7 +45,7 @@ export function parseWebhookUrl(input:string):URL{
 }
 export async function assertSafeWebhookUrl(input:string){
  const url=parseWebhookUrl(input);
- let ips:Awaited<ReturnType<typeof dns.lookup>>;
+ let ips:Array<{address:string;family:number}>;
  try{ips=await dns.lookup(url.hostname,{all:true,verbatim:true})}
  catch{throw new WebhookConfigurationError('Não foi possível resolver o domínio do webhook')}
  if(!ips.length || !ips.every(v=>isSafePublicAddress(v.address,v.family as 4|6)))
