@@ -24,11 +24,13 @@ for(const [range,prefix] of [
 ] as const)blacklist.addSubnet(range,prefix,'ipv4');
 for(const [range,prefix] of [
  ['::',128],['::1',128],['fc00::',7],['fe80::',10],
- ['2001:db8::',32],['::ffff:0:0',96]
+ ['2001:db8::',32]
 ] as const)blacklist.addSubnet(range,prefix,'ipv6');
 
 export function isSafePublicAddress(address:string,family:4|6):boolean{
  if(isIP(address)!==family)return false;
+ // Bloqueia IPv4-mapped IPv6, evitando bypass de filtros IPv4.
+ if(family===6&&address.toLowerCase().startsWith('::ffff:'))return false;
  return !blacklist.check(address,family===4?'ipv4':'ipv6');
 }
 export function parseWebhookUrl(input:string):URL{
