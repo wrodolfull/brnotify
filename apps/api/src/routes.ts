@@ -166,7 +166,8 @@ router.patch('/api/contacts/:id',tenant(true),activeTenant,wrap(async(req,res)=>
 router.get('/api/records',tenant(),wrap(async(req,res)=>{
  const id=uuid.parse(req.query.contact_id),p=pageParams(req.query.page);
  const list=await query('select * from records where tenant_id=$1 and contact_id=$2 order by created_at desc limit 20 offset $3',[req.tenantId,id,p.offset]);
- res.json({items:list.rows,page:p.page});
+ const count=await query('select count(*)::int n from records where tenant_id=$1 and contact_id=$2',[req.tenantId,id]);
+ res.json({items:list.rows,total:count.rows[0].n,page:p.page,pages:Math.ceil(count.rows[0].n/20)});
 }));
 router.post('/api/records',tenant(true),activeTenant,wrap(async(req,res)=>{
  const input=z.object({contact_id:uuid,label:str.min(1).max(180),kind:str.max(50).default('generic'),details:z.record(z.unknown()).default({})}).parse(req.body);
@@ -291,5 +292,6 @@ router.post('/api/imports',tenant(true),activeTenant,upload.single('file'),wrap(
 router.get('/api/imports',tenant(),wrap(async(req,res)=>{
  const p=pageParams(req.query.page);
  const items=await query('select * from import_jobs where tenant_id=$1 order by created_at desc limit 20 offset $2',[req.tenantId,p.offset]);
- res.json({items:items.rows,page:p.page});
+ const count=await query('select count(*)::int n from import_jobs where tenant_id=$1',[req.tenantId]);
+ res.json({items:items.rows,total:count.rows[0].n,page:p.page,pages:Math.ceil(count.rows[0].n/20)});
 }));
