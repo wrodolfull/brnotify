@@ -5,7 +5,7 @@ export const REPORT_KINDS=['all','message','appointment','confirmation','webhook
 export const REPORT_STATUSES=[
  'all','scheduled','processing','sent','delivered','failed','cancelled','unknown',
  'pending','not_requested','confirmed','reschedule_requested','declined',
- 'queued','dead','success','partial','completed'
+ 'queued','dead','success','partial','completed','ambiguous','unmatched'
 ] as const;
 export const reportFilterSchema=z.object({
  from:z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),

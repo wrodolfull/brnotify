@@ -31,14 +31,19 @@ const activitySource=[
   "from events e join contacts c on c.id=e.contact_id and c.tenant_id=e.tenant_id",
   "where e.tenant_id=$1 and e.starts_at>=$2 and e.starts_at<$3"
  ].join(' '),
- // Confirmações pela data de resposta, não pela data do agendamento.
+ // Respostas pela data recebida: mantém histórico de confirmações e ambiguidades.
  [
-  "select e.id::text,'confirmation'::text,e.confirmation_status::text,e.title::text,c.name::text,",
-  "e.external_id::text,e.confirmation_received_at,",
-  "'Resposta recebida via WhatsApp'::text,null::text",
-  "from events e join contacts c on c.id=e.contact_id and c.tenant_id=e.tenant_id",
-  "where e.tenant_id=$1 and e.confirmation_received_at>=$2",
-  "and e.confirmation_received_at<$3 and e.confirmation_status in('confirmed','reschedule_requested','declined')"
+  "select i.id::text,'confirmation'::text,",
+  "case when i.resolution='matched' then i.decision when i.resolution='ambiguous' then 'ambiguous' else 'unmatched' end::text,",
+  "coalesce(e.title,'Resposta de WhatsApp')::text,coalesce(c.name,'Contato não identificado')::text,",
+  "e.external_id::text,i.received_at,",
+  "case when i.resolution='ambiguous' then 'Vários eventos possíveis · revisar manualmente'",
+  "when i.resolution='matched' then 'Resposta associada ao agendamento'",
+  "else 'Resposta sem associação automática' end::text,null::text",
+  "from inbound_interactions i",
+  "left join events e on e.id=i.event_id and e.tenant_id=i.tenant_id",
+  "left join contacts c on c.id=i.contact_id and c.tenant_id=i.tenant_id",
+  "where i.tenant_id=$1 and i.received_at>=$2 and i.received_at<$3"
  ].join(' '),
  // Integrações externas.
  [
@@ -138,10 +143,12 @@ export async function reportSummary(tenantId:string,start:string,end:string,zone
   ].join(' '),common),
   query([
    "select count(*)::int total,",
-   "count(*) filter(where confirmation_status='confirmed')::int confirmed,",
-   "count(*) filter(where confirmation_status='reschedule_requested')::int reschedule_requested,",
-   "count(*) filter(where confirmation_status='declined')::int declined",
-   "from events where tenant_id=$1 and confirmation_received_at>=$2 and confirmation_received_at<$3"
+   "count(*) filter(where resolution='matched' and decision='confirmed')::int confirmed,",
+   "count(*) filter(where resolution='matched' and decision='reschedule_requested')::int reschedule_requested,",
+   "count(*) filter(where resolution='matched' and decision='declined')::int declined,",
+   "count(*) filter(where resolution='ambiguous')::int ambiguous,",
+   "count(*) filter(where resolution not in('matched','ambiguous'))::int unmatched",
+   "from inbound_interactions where tenant_id=$1 and received_at>=$2 and received_at<$3"
   ].join(' '),common),
   query("select count(*)::int created from contacts where tenant_id=$1 and created_at>=$2 and created_at<$3",common),
   query([

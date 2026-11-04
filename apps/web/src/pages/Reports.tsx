@@ -14,7 +14,7 @@ type Summary={
  tenant:string;period:{from:string;to:string;bucket:'day'|'week'|'month'};
  messages:{total:number;scheduled:number;processing:number;sent:number;delivered:number;failed:number;unknown:number;cancelled:number;accepted:number;attempts:number};
  appointments:{total:number;scheduled:number;cancelled:number;completed:number;confirmation_enabled:number;pending:number};
- confirmations:{total:number;confirmed:number;reschedule_requested:number;declined:number};
+ confirmations:{total:number;confirmed:number;reschedule_requested:number;declined:number;ambiguous:number;unmatched:number};
  contacts:{created:number};
  imports:{jobs:number;imported:number;rejected:number};
  webhooks:{total:number;delivered:number;failed:number;pending:number};
@@ -39,14 +39,14 @@ const statuses=[
  ['all','Todos os status'],['scheduled','Programado'],['sent','Enviado'],['delivered','Entregue'],
  ['failed','Falhou'],['unknown','Indeterminado'],['cancelled','Cancelado'],
  ['confirmed','Confirmado'],['pending','Aguardando'],['reschedule_requested','Reagendamento'],
- ['declined','Recusado'],['queued','Na fila'],['dead','Falha definitiva'],
+ ['declined','Recusado'],['ambiguous','Ambíguo'],['unmatched','Sem associação'],['queued','Na fila'],['dead','Falha definitiva'],
  ['success','Sucesso'],['partial','Parcial'],['completed','Concluído']
 ] as const;
 const statusMap:Record<string,string>=Object.fromEntries(statuses.map(([key,value])=>[key,value]));
 const kindMap:Record<string,string>=Object.fromEntries(categories.map(o=>[o.value,o.label]));
 const statusStyle=(status:string)=>{
  if(['delivered','confirmed','success','completed'].includes(status))return 'report-status-ok';
- if(['failed','dead','unknown','declined'].includes(status))return 'report-status-bad';
+ if(['failed','dead','unknown','declined','ambiguous','unmatched'].includes(status))return 'report-status-bad';
  if(['queued','scheduled','pending','processing','sent'].includes(status))return 'report-status-pending';
  return 'report-status-muted';
 };
@@ -216,6 +216,7 @@ export function Reports(){
       <div><Webhook size={17}/><span>Webhooks entregues</span><strong>{countFmt(summary.webhooks.delivered)}</strong></div>
       <div><AlertTriangle size={17}/><span>Erros de API</span><strong>{countFmt(summary.api.failed)}</strong></div>
       <div><AlertTriangle size={17}/><span>Webhooks com falha</span><strong>{countFmt(summary.webhooks.failed)}</strong></div>
+      <div><AlertTriangle size={17}/><span>Respostas sem associação</span><strong>{countFmt(summary.confirmations.ambiguous+summary.confirmations.unmatched)}</strong></div>
      </div>
     </Card>
     <Card className="report-errors-card">

@@ -15,6 +15,7 @@ try{
  assert.ok(tenant.rowCount,'Usuário de teste do db-smoke ausente');
  const tenantId=tenant.rows[0].id;
  const zone=tenant.rows[0].timezone;
+ await query("insert into inbound_interactions(tenant_id,provider_event_id,contact_id,event_id,decision,resolution) select e.tenant_id,'ci-report-confirmed',e.contact_id,e.id,'confirmed','matched' from events e where e.tenant_id=$1 and e.external_id='REV-CI-1' on conflict(provider_event_id) do nothing",[tenantId]);
  const start=DateTime.now().setZone(zone).startOf('day').toUTC().toISO()!;
  const end=DateTime.now().setZone(zone).plus({days:40}).startOf('day').toUTC().toISO()!;
  const summary=await reportSummary(tenantId,start,end,zone,'day');
