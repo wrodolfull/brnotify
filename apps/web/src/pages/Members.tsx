@@ -1,0 +1,14 @@
+import {useState,type FormEvent} from 'react';
+import {Mail,ShieldCheck,Trash2,UserRound,UserPlus} from 'lucide-react';
+import {useApp} from '../context';
+import {Button,Card,Empty,ErrorHint,Input,Modal,NewButton,PageTitle,Pagination,SubmitRow,formValues,useList} from '../components';
+export function Members(){
+ const {api,notify,tenantName}=useApp(),list=useList('/api/members');
+ const [modal,setModal]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState('');
+ async function invite(e:FormEvent<HTMLFormElement>){e.preventDefault();setBusy(true);setError('');const v=formValues(e);try{await api('/api/members',{method:'POST',body:JSON.stringify({email:v.email,role:v.role})});notify('Acesso provisionado. Convite enviado, quando aplicável.');setModal(false);list.refresh()}catch(e:any){setError(e.message)}finally{setBusy(false)}}
+ async function remove(id:string){if(!window.confirm('Remover o acesso deste usuário ao ambiente?'))return;try{await api('/api/members/'+id,{method:'DELETE'});notify('Acesso removido');list.refresh()}catch(e:any){notify(e.message,'error')}}
+ return <><PageTitle eyebrow="PLATAFORMA / SUPER ADMIN" title="Acessos" subtitle={'Gerencie quem pode acessar '+tenantName+'.'} action={<NewButton label="Convidar usuário" onClick={()=>setModal(true)}/>}/>
+ <Card><div className="card-heading"><div><h2>Usuários do ambiente</h2><p>Apenas o Super Admin pode provisionar ou remover contas.</p></div></div><ErrorHint error={list.error}/>{list.data.items.length?<div className="data-list">{list.data.items.map((u:any)=><div className="data-row static-row" key={u.user_id}><span className="list-avatar">{u.email.slice(0,1).toUpperCase()}</span><span className="row-main"><strong>{u.email}</strong><small>{u.role==='admin'?'Administrador':'Visualizador'}</small></span><span className="status">{u.role==='admin'?'Admin':'Leitura'}</span><button className="icon-button" onClick={()=>remove(u.user_id)} title="Remover usuário"><Trash2 size={17}/></button></div>)}</div>:<Empty title="Sem usuários adicionais" subtitle="Convide um administrador ou visualizador para acessar este ambiente."/>}<Pagination page={list.page} pages={list.data.pages} onChange={list.setPage}/></Card>
+ {modal&&<Modal title="Convidar usuário" onClose={()=>setModal(false)}><form className="form-stack" onSubmit={invite}><Input type="email" label="E-mail do usuário" name="email" placeholder="pessoa@empresa.com" required/><label className="field"><span>Permissão</span><select name="role"><option value="admin">Administrador — gerencia dados e integrações</option><option value="viewer">Visualizador — somente leitura</option></select></label><p className="hint">O convite utiliza o Supabase Auth. Configure o SMTP de produção no Supabase para entrega confiável dos e-mails.</p><ErrorHint error={error}/><SubmitRow busy={busy} label="Enviar convite" onCancel={()=>setModal(false)}/></form></Modal>}
+ </>;
+}
