@@ -1,0 +1,56 @@
+/* BR Notify integrations: light-only, mobile-first. */
+.integration-explainer{display:flex;align-items:center;gap:16px;background:#eaf3ff;border:1px solid #dceafe;border-radius:16px;padding:19px 21px;margin-bottom:20px}
+.integration-explainer-icon{height:43px;width:43px;display:grid;place-items:center;color:#2477e8;background:#d6e7ff;border-radius:13px;flex:none}
+.integration-explainer>div{display:flex;flex-direction:column;gap:5px}
+.integration-explainer strong{font-size:13px;letter-spacing:-.2px}
+.integration-explainer div span{font-size:11px;color:#627995;line-height:1.6}
+.integration-tablist{display:flex;align-items:center;gap:4px;margin-bottom:18px;background:#fff;border:1px solid #eceef1;border-radius:14px;padding:5px;overflow-x:auto;scrollbar-width:thin}
+.integration-tab{background:transparent;border:none;border-radius:10px;padding:12px 14px;white-space:nowrap;display:flex;align-items:center;gap:8px;color:#8893a1;font-size:11px;font-weight:800;flex:none}
+.integration-tab:hover{background:#f4f6f9;color:#424b58}
+.integration-tab-active,.integration-tab[aria-selected=true]{background:#20242b;color:#fff}
+.integration-tab-active:hover{background:#20242b;color:#fff}
+.integration-meta{display:flex;flex-direction:column;align-items:flex-end;gap:7px;white-space:nowrap}
+.integration-meta>small{font-size:10px;color:#9da4ae}
+.integration-url{max-width:480px}
+.integration-inline-actions{display:flex;align-items:center;gap:4px}
+.integration-inline-actions .icon-button{width:31px;height:31px}
+.integration-warning{background:#f1f7ff;border-radius:10px;padding:14px;display:flex;align-items:flex-start;gap:10px;color:#476f9e;font-size:12px}
+.integration-warning svg{flex:none}
+.secret-preview{display:flex;flex-direction:column;gap:9px}
+.secret-preview strong{font-size:12px}
+.secret-preview code{display:block;background:#151a22;color:#d2e8ff;border-radius:12px;padding:17px;font-size:12px;overflow-wrap:anywhere}
+.integration-choices{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;max-height:320px;overflow:auto}
+.integration-choices-label{font-size:12px;font-weight:800;color:#505a67}
+.integration-choice{display:flex;align-items:flex-start;gap:8px;padding:13px;border:1px solid #eef0f3;border-radius:11px;cursor:pointer}
+.integration-choice input{accent-color:#327cf3;margin:3px 0;flex:none}
+.integration-choice span{min-width:0;display:flex;flex-direction:column;gap:4px}
+.integration-choice strong{font-size:11px;color:#28313e}
+.integration-choice code{font-size:10px;color:#9199a5;overflow-wrap:anywhere}
+.integration-method{font-size:10px;font-weight:800;color:#2375db;background:#eaf3ff;border-radius:7px;padding:7px;min-width:48px;text-align:center}
+.integration-response{font-size:11px;color:#7c8592;white-space:nowrap}
+.integration-error{color:#c35a51!important}
+.integration-muted{font-size:11px;color:#8a96a6}
+@media(max-width:790px){
+ .integration-choices{grid-template-columns:1fr}
+ .integration-tablist{margin-left:-1px;margin-right:-1px}
+ .integration-tab{padding:11px 12px}
+ .integration-webhook-row{flex-wrap:wrap}
+ .integration-webhook-row .row-main{flex:1 1 65%}
+ .integration-webhook-row .integration-inline-actions{margin-left:48px}
+ .integration-explainer{align-items:flex-start;padding:16px}
+ .integration-url{max-width:calc(100vw - 105px)}
+}
+@media(max-width:430px){
+ .integration-meta small{display:none}
+ .integration-choice{padding:11px}
+ .integration-response{display:none}
+}
+
+.integration-health{background:#fff;border:1px solid #eaedf1;border-radius:15px;padding:15px 18px;margin-bottom:18px}
+.integration-health-head{display:flex;align-items:center;gap:8px;color:#4d5968}
+.integration-health-head strong{font-size:12px}
+.integration-health-head span{color:#8993a1;font-size:10px;margin-left:auto}
+.integration-health-list{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.integration-health-item{font-size:10px;line-height:1.5;padding:8px 11px;border-radius:8px;background:#f2f6fc;color:#55708f}
+.integration-health-warning{background:#fff7e8;color:#a47527}
+.integration-health-critical{background:#fff0ee;color:#b34e49}

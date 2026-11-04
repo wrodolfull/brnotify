@@ -1,6 +1,8 @@
 import {DateTime} from 'luxon';
 import {query} from './db.js';
 import {buildTemplatePayload,ProviderError,sendTemplate} from './goto.js';
+import {registerIncomingDecision} from './confirmation.js';
+import {phoneE164} from './time.js';
 
 export async function processMessages(){
  const claimed=await query(
@@ -10,12 +12,12 @@ export async function processMessages(){
   let httpStatus:number|null=null;
   try{
    const data=await query(
-    'select m.*,e.title,e.event_type,e.starts_at,e.status as event_status,e.details as event_details,t.timezone,c.name,c.phone,c.email,c.consent,c.opted_out_at,c.custom_data,r.details as record_details,mt.name as template_name,mt.language_code,mt.status as template_status,mt.definition,mt.variable_map,g.from_touchpoint from scheduled_messages m join events e on e.id=m.event_id and e.tenant_id=m.tenant_id join tenants t on t.id=m.tenant_id join contacts c on c.id=e.contact_id and c.tenant_id=m.tenant_id left join records r on r.id=e.record_id and r.tenant_id=m.tenant_id left join message_templates mt on mt.id=m.template_id and mt.tenant_id=m.tenant_id left join goto_connections g on g.tenant_id=m.tenant_id where m.id=$1',
+    'select m.*,e.title,e.event_type,e.starts_at,e.status as event_status,e.confirmation_status,e.schedule_revision as event_revision,e.details as event_details,t.timezone,c.name,c.phone,c.email,c.consent,c.opted_out_at,c.custom_data,r.details as record_details,mt.name as template_name,mt.language_code,mt.status as template_status,mt.definition,mt.variable_map,g.from_touchpoint from scheduled_messages m join events e on e.id=m.event_id and e.tenant_id=m.tenant_id join tenants t on t.id=m.tenant_id join contacts c on c.id=e.contact_id and c.tenant_id=m.tenant_id left join records r on r.id=e.record_id and r.tenant_id=m.tenant_id left join message_templates mt on mt.id=m.template_id and mt.tenant_id=m.tenant_id left join goto_connections g on g.tenant_id=m.tenant_id where m.id=$1',
     [msg.id]
    );
    const v=data.rows[0];
    if(!v)throw new Error('Evento inexistente');
-   if(v.event_status!=='scheduled'||!v.consent||v.opted_out_at)throw new Error('Evento cancelado ou contato sem consentimento');
+   if(v.event_status!=='scheduled'||v.event_revision!==msg.schedule_revision||['reschedule_requested','declined'].includes(v.confirmation_status)||!v.consent||v.opted_out_at)throw new Error('Evento alterado, cancelado ou contato sem consentimento');
    if(!v.template_id||!v.definition||!v.from_touchpoint)throw new Error('Configure um template aprovado e remetente GoTo para este lembrete');
    if(DateTime.fromJSDate(new Date(v.starts_at)).toMillis()<=Date.now())throw new Error('Data do evento já passou');
    const payload=buildTemplatePayload(
@@ -51,19 +53,27 @@ export async function handleGotoWebhook(event:any){
  if(!tenant.rowCount)return false;
  const tenantId=tenant.rows[0].tenant_id;
  const inserted=await query('insert into webhook_events(event_id,tenant_id,payload) values($1,$2,$3) on conflict do nothing returning event_id',[event.id,tenantId,JSON.stringify(event)]);
- if(!inserted.rowCount)return true;
+ if(!inserted.rowCount){
+  const old=await query('select processed_at from webhook_events where event_id=$1',[event.id]);
+  if(old.rows[0]?.processed_at)return true;
+ }
  if(event.type==='INBOUND_MESSAGE'&&event.content.payload?.channel==='WHATSAPP'){
   const p=event.content.payload;
   const text=String(p.body||'').trim().toUpperCase();
   if(['STOP','SAIR','PARAR','CANCELAR','DESCADASTRAR'].includes(text)){
-   const author=String(p.authorTouchpoint||'');
+   let author='';try{author=phoneE164(p.authorTouchpoint)}catch{}
    const ct=await query("update contacts set consent=false,opted_out_at=now(),updated_at=now() where tenant_id=$1 and phone=$2 returning id",[tenantId,author]);
    for(const c of ct.rows)await query("update scheduled_messages set status='cancelled',updated_at=now() where tenant_id=$1 and event_id in(select id from events where tenant_id=$1 and contact_id=$2) and status='scheduled'",[tenantId,c.id]);
+  }else{
+   await registerIncomingDecision(tenantId,event.id,p);
   }
  }
  if(event.type==='DELIVERY_STATUS'){
   const payload=event.content.payload||{};
-  if(typeof payload.messageId!=='string')return true;
+  if(typeof payload.messageId!=='string'){
+   await query('update webhook_events set processed_at=now() where event_id=$1',[event.id]);
+   return true;
+  }
   const description=String(payload.deliveryStatus?.description||'UNKNOWN');
   const code=String(payload.deliveryStatus?.code||'');
   const status=description==='DELIVERED'?'delivered':code.startsWith('4')||code.startsWith('5')?'failed':'sent';
@@ -72,5 +82,6 @@ export async function handleGotoWebhook(event:any){
    [status,code,description,tenantId,payload.messageId]
   );
  }
+ await query('update webhook_events set processed_at=now() where event_id=$1',[event.id]);
  return true;
 }

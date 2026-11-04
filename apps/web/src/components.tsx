@@ -15,11 +15,11 @@ export function Modal({title,children,onClose}:{title:string;children:ReactNode;
 export function Status({value}:{value:string}){return <span className={'status status-'+value}>{({scheduled:'Programado',processing:'Processando',sent:'Enviado',delivered:'Entregue',failed:'Falhou',cancelled:'Cancelado',unknown:'Indeterminado',active:'Ativo',paused:'Pausado',suspended:'Suspenso',APPROVED:'Aprovado'} as Record<string,string>)[value]||value}</span>}
 export function Empty({title='Nenhum registro',subtitle='Quando houver dados, eles aparecerão aqui.'}:{title?:string;subtitle?:string}){return <div className="empty-state"><Inbox size={30} strokeWidth={1.5}/><strong>{title}</strong><span>{subtitle}</span></div>}
 export function ErrorHint({error}:{error:string}){return error?<div className="inline-error">{error}</div>:null}
-export function useList(path:string){
+export function useList(path:string,enabled=true){
  const {api}=useApp();
  const [data,setData]=useState<{items:any[];total:number;pages:number}>({items:[],total:0,pages:1});
  const [page,setPage]=useState(1),[loading,setLoading]=useState(true),[error,setError]=useState(''),[revision,setRevision]=useState(0);
- useEffect(()=>{let alive=true;setLoading(true);api(path+(path.includes('?')?'&':'?')+'page='+page).then(v=>{if(alive){setData({items:v.items||[],total:v.total||0,pages:v.pages||1});setError('')}}).catch(e=>{if(alive)setError(e.message)}).finally(()=>{if(alive)setLoading(false)});return()=>{alive=false}},[api,path,page,revision]);
+ useEffect(()=>{if(!enabled)return;let alive=true;setLoading(true);api(path+(path.includes('?')?'&':'?')+'page='+page).then(v=>{if(alive){setData({items:v.items||[],total:v.total||0,pages:v.pages||1});setError('')}}).catch(e=>{if(alive)setError(e.message)}).finally(()=>{if(alive)setLoading(false)});return()=>{alive=false}},[api,path,page,revision,enabled]);
  return {data,page,setPage,loading,error,refresh:()=>setRevision(v=>v+1)};
 }
 export function Pagination({page,pages,onChange}:{page:number;pages:number;onChange:(p:number)=>void}){

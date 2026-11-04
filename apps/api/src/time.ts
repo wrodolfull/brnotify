@@ -32,15 +32,16 @@ export function calculateReminder(eventISO:string,zone:string,rule:Rule){
  if(!at.isValid)throw new Error('Regra de lembrete inválida');
  return at.toUTC().toISO()!;
 }
-export async function rebuildEvent(tenantId:string,eventId:string){
- const loaded=await query(
+export type SqlRunner=(sql:string,params?:unknown[])=>Promise<{rows:any[];rowCount:number|null}>;
+export async function rebuildEvent(tenantId:string,eventId:string,run:SqlRunner=query){
+ const loaded=await run(
   'select e.*,t.timezone,c.consent,c.opted_out_at,c.reminder_overrides as contact_overrides from events e join tenants t on t.id=e.tenant_id join contacts c on c.id=e.contact_id and c.tenant_id=e.tenant_id where e.tenant_id=$1 and e.id=$2',
   [tenantId,eventId]
  );
  if(!loaded.rowCount)return;
  const ev=loaded.rows[0];
- const rules=await query('select * from reminder_rules where tenant_id=$1 order by slot',[tenantId]);
- const active=ev.status==='scheduled'&&ev.consent&&!ev.opted_out_at;
+ const rules=await run('select * from reminder_rules where tenant_id=$1 order by slot',[tenantId]);
+ const active=ev.status==='scheduled'&&ev.consent&&!ev.opted_out_at&&!['reschedule_requested','declined'].includes(ev.confirmation_status||'');
  const overrides=ev.reminder_overrides||ev.contact_overrides||{};
  const validSlots:number[]=[];
  for(const base of rules.rows as Rule[]){
@@ -51,10 +52,10 @@ export async function rebuildEvent(tenantId:string,eventId:string){
   if(DateTime.fromISO(due).toMillis()<=Date.now())continue;
   if(DateTime.fromISO(due).toMillis()>=new Date(ev.starts_at).getTime())continue;
   validSlots.push(rule.slot);
-  await query(
-   "insert into scheduled_messages(tenant_id,event_id,slot,scheduled_at,template_id) values($1,$2,$3,$4,$5) on conflict(event_id,slot) do update set scheduled_at=excluded.scheduled_at,template_id=excluded.template_id,status='scheduled',error_code=null,error_description=null,updated_at=now() where scheduled_messages.status in ('scheduled','cancelled')",
-   [tenantId,eventId,rule.slot,due,rule.template_id]
+  await run(
+   "insert into scheduled_messages(tenant_id,event_id,slot,scheduled_at,template_id,schedule_revision) values($1,$2,$3,$4,$5,$6) on conflict(event_id,slot,schedule_revision) do update set scheduled_at=excluded.scheduled_at,template_id=excluded.template_id,status='scheduled',error_code=null,error_description=null,updated_at=now() where scheduled_messages.status in ('scheduled','cancelled')",
+   [tenantId,eventId,rule.slot,due,rule.template_id,ev.schedule_revision]
   );
  }
- await query("update scheduled_messages set status='cancelled',updated_at=now() where tenant_id=$1 and event_id=$2 and status='scheduled' and not(slot=any($3::int[]))",[tenantId,eventId,validSlots]);
+ await run("update scheduled_messages set status='cancelled',updated_at=now() where tenant_id=$1 and event_id=$2 and status='scheduled' and (schedule_revision<>$3 or not(slot=any($4::int[])))",[tenantId,eventId,ev.schedule_revision,validSlots]);
 }

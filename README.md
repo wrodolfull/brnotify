@@ -9,7 +9,7 @@ Plataforma de lembretes multitenant por WhatsApp, com integração GoTo Messagin
 
 ## Instalação
 1. Requer Node.js 22+, Supabase (Auth + PostgreSQL) e uma organização GoTo com WhatsApp habilitado.
-2. Execute `database/001_init.sql` e depois `database/002_rebuild_queue.sql` no SQL Editor do Supabase.
+2. Execute `database/001_init.sql`, `database/002_rebuild_queue.sql` e `database/003_public_integrations.sql`, nesta ordem, no SQL Editor do Supabase.
 3. Copie `.env.example` para `.env` e configure os segredos apenas no servidor.
 4. Execute `npm install`.
 5. Execute `npm run bootstrap -w @brnotify/api` para criar o primeiro super administrador (requer BOOTSTRAP_EMAIL e BOOTSTRAP_PASSWORD; mínimo 12 caracteres).
@@ -34,3 +34,11 @@ Para status de entrega, configure no GoTo Notification Channel um webhook HTTPS 
 - Teste real de autenticação, OAuth, templates e webhook antes de produção.
 
 Documentação GoTo: https://developer.goto.com/guides/GoToConnect/18_HOW_useMessagingV2Api/
+
+## Integrações v1
+
+O módulo **API e Integrações** permite ao Administrador criar chaves por ambiente, cadastrar webhooks assinados e monitorar chamadas, entregas e confirmações recebidas pelo GoTo.
+
+- Documentação e exemplos: [API Pública](docs/PUBLIC_API.md)
+- Contrato OpenAPI disponível em `/v1/openapi.json`
+- Sem planos, cobrança ou criação pública de usuários.
