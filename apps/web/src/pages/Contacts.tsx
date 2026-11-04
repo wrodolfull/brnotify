@@ -12,13 +12,30 @@ const modelFields:Record<string,[string,string][]> = {
 };
 export function Contacts(){
  const {api,role,notify,segment}=useApp(),canEdit=role==='admin';
- const [q,setQ]=useState(''),[modal,setModal]=useState(false),[selected,setSelected]=useState<any>(null),[records,setRecords]=useState<any[]>([]),[events,setEvents]=useState<any[]>([]),[recordModal,setRecordModal]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState('');
+ const [q,setQ]=useState(''),[modal,setModal]=useState(false),[selected,setSelected]=useState<any>(null),[rulesModal,setRulesModal]=useState(false),[contactRules,setContactRules]=useState<any[]>([]),[records,setRecords]=useState<any[]>([]),[events,setEvents]=useState<any[]>([]),[recordModal,setRecordModal]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState('');
  const list=useList('/api/contacts?q='+encodeURIComponent(q));
- const open=async(c:any)=>{setSelected(c);setRecords([]);setEvents([]);const [a,b]=await Promise.all([api('/api/records?contact_id='+c.id),api('/api/events?contact_id='+c.id)]);setRecords(a.items);setEvents(b.items)};
+ const open=async(c:any)=>{setSelected(c);setContactRules([{enabled:true,offset_value:1,offset_unit:'months'},{enabled:true,offset_value:3,offset_unit:'days'},{enabled:true,offset_value:1,offset_unit:'days'}].map((r,i)=>({...r,...(c.reminder_overrides?.[String(i+1)]||{})})));setRecords([]);setEvents([]);const [a,b]=await Promise.all([api('/api/records?contact_id='+c.id),api('/api/events?contact_id='+c.id)]);setRecords(a.items);setEvents(b.items)};
  const submit=async(e:FormEvent<HTMLFormElement>)=>{e.preventDefault();setBusy(true);setError('');const v=formValues(e);try{
   await api('/api/contacts',{method:'POST',body:JSON.stringify({name:v.name,phone:v.phone,email:v.email,consent:v.consent==='on',consent_source:v.consent_source})});
   notify('Contato cadastrado');setModal(false);list.refresh()
  }catch(e:any){setError(e.message)}finally{setBusy(false)}};
+ const saveContactRules=async()=>{
+  setBusy(true);setError('');
+  try{
+   const overrides=Object.fromEntries(contactRules.map((r,i)=>[String(i+1),r]));
+   const updated=await api('/api/contacts/'+selected.id,{method:'PATCH',body:JSON.stringify({reminder_overrides:overrides})});
+   setSelected(updated);setRulesModal(false);list.refresh();notify('Lembretes do contato atualizados');
+  }catch(e:any){setError(e.message)}finally{setBusy(false)}
+ };
+ const toggleConsent=async()=>{
+  const enable=!(selected.consent&&!selected.opted_out_at);
+  const source=enable?window.prompt('Qual é a origem da nova autorização para WhatsApp?'):null;
+  if(enable&&!source?.trim())return;
+  try{
+   const changed=await api('/api/contacts/'+selected.id,{method:'PATCH',body:JSON.stringify(enable?{consent:true,consent_source:source}:{consent:false})});
+   setSelected(changed);list.refresh();notify(enable?'Consentimento registrado':'Mensagens futuras bloqueadas');
+  }catch(e:any){notify(e.message,'error')}
+ };
  const addRecord=async(e:FormEvent<HTMLFormElement>)=>{e.preventDefault();setBusy(true);setError('');const v=formValues(e);try{
   const details=Object.fromEntries((modelFields[segment]||[]).filter(([key])=>!!v[key]).map(([key])=>[key,v[key]]));
   await api('/api/records',{method:'POST',body:JSON.stringify({contact_id:selected.id,label:v.label,kind:segment,details})});
@@ -31,9 +48,10 @@ export function Contacts(){
  <Pagination page={list.page} pages={list.data.pages} onChange={list.setPage}/></Card>
  {modal&&<Modal title="Cadastrar contato" onClose={()=>setModal(false)}><form className="form-stack" onSubmit={submit}><Input name="name" label="Nome completo" required placeholder="Nome do cliente"/><div className="form-grid"><Input name="phone" label="WhatsApp com DDD" required placeholder="(19) 99999-9999"/><Input name="email" label="E-mail (opcional)" type="email" placeholder="cliente@email.com"/></div><label className="checkbox-row"><input type="checkbox" name="consent"/> O contato autorizou receber mensagens via WhatsApp</label><Input name="consent_source" label="Origem do consentimento" placeholder="Ex.: formulário assinado em loja"/><ErrorHint error={error}/><SubmitRow onCancel={()=>setModal(false)} busy={busy} label="Cadastrar contato"/></form></Modal>}
  {selected&&<Modal title="Detalhes do contato" onClose={()=>setSelected(null)}><div className="detail-profile"><div className="detail-big-avatar">{selected.name.slice(0,1).toUpperCase()}</div><div><h3>{selected.name}</h3><p><Phone size={15}/>{selected.phone}</p>{selected.email&&<p><Mail size={15}/>{selected.email}</p>}</div></div>
- <div className="detail-section"><div className="detail-heading"><h3>Registros associados</h3>{canEdit&&<button className="tiny-action" onClick={()=>{setError('');setRecordModal(true)}}><Plus size={15}/> Novo</button>}</div>{records.length?records.map(x=><div className="mini-line" key={x.id}><CarFront size={17}/><span>{x.label}</span></div>):<p className="muted">Nenhum registro associado.</p>}</div>
+ <div className="detail-section"><div className="detail-heading"><h3>Mensagens WhatsApp</h3></div><p className="muted">{selected.consent&&!selected.opted_out_at?'Autorizado a receber mensagens':'Não autorizado a receber mensagens'}</p>{canEdit&&<div className="button-row"><Button secondary onClick={toggleConsent}>{selected.consent&&!selected.opted_out_at?'Revogar autorização':'Registrar autorização'}</Button><Button secondary onClick={()=>{setError('');setRulesModal(true)}}>Lembretes individuais</Button></div>}</div><div className="detail-section"><div className="detail-heading"><h3>Registros associados</h3>{canEdit&&<button className="tiny-action" onClick={()=>{setError('');setRecordModal(true)}}><Plus size={15}/> Novo</button>}</div>{records.length?records.map(x=><div className="mini-line" key={x.id}><CarFront size={17}/><span>{x.label}</span></div>):<p className="muted">Nenhum registro associado.</p>}</div>
  <div className="detail-section"><div className="detail-heading"><h3>Eventos</h3></div>{events.length?events.map(x=><div className="mini-line" key={x.id}><CalendarDays size={17}/><span>{x.title}</span><small>{fmtDate(x.starts_at)}</small></div>):<p className="muted">Nenhum evento cadastrado.</p>}</div>
  </Modal>}
+ {rulesModal&&selected&&<Modal title="Lembretes do contato" onClose={()=>setRulesModal(false)}><div className="form-stack"><p className="muted">Essas preferências serão utilizadas como padrão nos eventos deste contato.</p>{contactRules.map((rule:any,i:number)=><div key={i} className="override-item"><label className="checkbox-row"><input type="checkbox" checked={rule.enabled} onChange={ev=>setContactRules(rows=>rows.map((r,j)=>j===i?{...r,enabled:ev.target.checked}:r))}/> Lembrete {i+1}</label><div className="form-grid"><label className="field"><span>Antecedência</span><input type="number" min="1" max="365" disabled={!rule.enabled} value={rule.offset_value} onChange={ev=>setContactRules(rows=>rows.map((r,j)=>j===i?{...r,offset_value:Number(ev.target.value)}:r))}/></label><label className="field"><span>Unidade</span><select disabled={!rule.enabled} value={rule.offset_unit} onChange={ev=>setContactRules(rows=>rows.map((r,j)=>j===i?{...r,offset_unit:ev.target.value}:r))}><option value="days">Dias</option><option value="weeks">Semanas</option><option value="months">Meses</option></select></label></div></div>)}<ErrorHint error={error}/><div className="form-footer"><Button secondary onClick={()=>setRulesModal(false)}>Cancelar</Button><Button disabled={busy} onClick={saveContactRules}>Salvar lembretes</Button></div></div></Modal>}
  {recordModal&&selected&&<Modal title="Novo registro associado" onClose={()=>setRecordModal(false)}><form onSubmit={addRecord} className="form-stack"><Input name="label" label="Identificação" placeholder="Ex.: Corolla / Rex / Consulta" required/>{(modelFields[segment]||[]).map(([key,label])=><Input key={key} name={key} label={label+' (opcional)'}/>)}<ErrorHint error={error}/><SubmitRow onCancel={()=>setRecordModal(false)} busy={busy}/></form></Modal>}
  </>;
 }

@@ -20,7 +20,7 @@ const str=z.string().trim();
 const uuid=z.string().uuid();
 const contactInput=z.object({
  name:str.min(2).max(180),phone:str.min(10).max(30),email:z.union([z.string().email(),z.literal('')]).optional(),
- consent:z.boolean().default(false),consent_source:str.max(200).optional(),custom_data:z.record(z.unknown()).optional()
+ consent:z.boolean().default(false),consent_source:str.max(200).optional(),custom_data:z.record(z.unknown()).optional(),reminder_overrides:z.record(z.unknown()).nullable().optional()
 });
 const eventInput=z.object({
  contact_id:uuid,record_id:uuid.nullish(),title:str.min(2).max(160),event_type:str.max(100).optional(),
@@ -133,8 +133,8 @@ router.post('/api/contacts',tenant(true),activeTenant,wrap(async(req,res)=>{
  const phone=phoneE164(input.phone);
  if(input.consent&&!input.consent_source)return res.status(422).json({error:'Informe a origem do consentimento'});
  const inserted=await query(
-  "insert into contacts(tenant_id,name,phone,email,consent,consent_source,consent_at,custom_data) values($1,$2,$3,$4,$5,$6,case when $5 then now() end,$7) returning *",
-  [req.tenantId,input.name,phone,input.email||null,input.consent,input.consent_source||null,JSON.stringify(input.custom_data||{})]
+  "insert into contacts(tenant_id,name,phone,email,consent,consent_source,consent_at,custom_data,reminder_overrides) values($1,$2,$3,$4,$5,$6,case when $5 then now() end,$7,$8) returning *",
+  [req.tenantId,input.name,phone,input.email||null,input.consent,input.consent_source||null,JSON.stringify(input.custom_data||{}),input.reminder_overrides?JSON.stringify(input.reminder_overrides):null]
  );
  await audit(req.tenantId!,req.actor!.id,'contact.created',{id:inserted.rows[0].id});
  res.status(201).json(inserted.rows[0]);
@@ -146,10 +146,10 @@ router.patch('/api/contacts/:id',tenant(true),activeTenant,wrap(async(req,res)=>
  if(input.consent===true&&(!input.consent_source&&!current.rows[0].consent_source||current.rows[0].opted_out_at&&!input.consent_source))return res.status(422).json({error:'Informe nova origem de consentimento para reativar'});
  const old=current.rows[0];
  const changed=await query(
-  "update contacts set name=$3,phone=$4,email=$5,consent=$6,consent_source=$7,consent_at=case when $6=true and consent=false then now() else consent_at end,opted_out_at=case when $6=false then now() when $9=true then null else opted_out_at end,custom_data=$8,updated_at=now() where tenant_id=$1 and id=$2 returning *",
-  [req.tenantId,old.id,input.name??old.name,input.phone?phoneE164(input.phone):old.phone,input.email??old.email,input.consent??old.consent,input.consent_source??old.consent_source,JSON.stringify(input.custom_data??old.custom_data),input.consent===true&&!!input.consent_source]
+  "update contacts set name=$3,phone=$4,email=$5,consent=$6,consent_source=$7,consent_at=case when $6=true and consent=false then now() else consent_at end,opted_out_at=case when $6=false then now() when $9=true then null else opted_out_at end,custom_data=$8,reminder_overrides=$10,updated_at=now() where tenant_id=$1 and id=$2 returning *",
+  [req.tenantId,old.id,input.name??old.name,input.phone?phoneE164(input.phone):old.phone,input.email??old.email,input.consent??old.consent,input.consent_source??old.consent_source,JSON.stringify(input.custom_data??old.custom_data),input.consent===true&&!!input.consent_source,input.reminder_overrides===undefined?old.reminder_overrides:input.reminder_overrides?JSON.stringify(input.reminder_overrides):null]
  );
- if(input.consent===true){const evs=await query("select id from events where tenant_id=$1 and contact_id=$2 and status='scheduled' and starts_at>now()",[req.tenantId,old.id]);for(const ev of evs.rows)await rebuildEvent(req.tenantId!,ev.id)}
+ if(input.consent===true||input.reminder_overrides!==undefined){const evs=await query("select id from events where tenant_id=$1 and contact_id=$2 and status='scheduled' and starts_at>now()",[req.tenantId,old.id]);for(const ev of evs.rows)await rebuildEvent(req.tenantId!,ev.id)}
  if(input.consent===false){
   await query("update scheduled_messages set status='cancelled' where tenant_id=$1 and event_id in(select id from events where tenant_id=$1 and contact_id=$2) and status='scheduled'",[req.tenantId,old.id]);
  }

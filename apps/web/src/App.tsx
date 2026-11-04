@@ -46,7 +46,7 @@ function Workspace({session}:{session:Session}){
  const tenantName=selected?.name||'Selecionar ambiente';
  const segment=selected?.segment||actor?.memberships.find(m=>m.tenant_id===tenantId)?.segment||'custom';
  const isSuper=!!actor?.superAdmin;
- const role=selected?.role||actor?.memberships.find(m=>m.tenant_id===tenantId)?.role||'admin';
+ const role=isSuper?'admin':(selected?.role||actor?.memberships.find(m=>m.tenant_id===tenantId)?.role||'viewer');
  const ctx=useMemo(()=>actor?{actor,tenantId,tenantName,segment,role:role as 'admin'|'viewer',isSuper,api,notify,refresh}:null,[actor,tenantId,tenantName,segment,role,isSuper,api,notify,refresh]);
  const changeTenant=(id:string)=>{setTenantId(id);localStorage.setItem('brnotify.tenant',id);navigate('/');setMenuOpen(false)};
  if(busy)return <Loader/>;
