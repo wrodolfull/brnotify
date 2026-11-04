@@ -11,6 +11,27 @@ export const integrationAdminRouter=Router();
 integrationAdminRouter.use(authenticate,tenant(true),activeTenant);
 const uuid=z.string().uuid();
 
+integrationAdminRouter.get('/health',wrap(async(req,res)=>{
+ const tenantId=req.tenantId!;
+ const [keys,dead,ambiguous,connection]=await Promise.all([
+  query('select count(*)::int n from integration_api_keys where tenant_id=$1 and revoked_at is null and expires_at>now()',[tenantId]),
+  query("select count(*)::int n from outbound_webhook_deliveries where tenant_id=$1 and status='dead' and created_at>now()-interval '30 days'",[tenantId]),
+  query("select count(*)::int n from inbound_interactions where tenant_id=$1 and resolution='ambiguous' and received_at>now()-interval '30 days'",[tenantId]),
+  query('select account_key,from_touchpoint,notification_subscription_id from goto_connections where tenant_id=$1',[tenantId])
+ ]);
+ const activeKeys=keys.rows[0].n,deliveryFailures=dead.rows[0].n,unresolved=ambiguous.rows[0].n;
+ const linked=!!(connection.rows[0]?.account_key&&connection.rows[0]?.from_touchpoint);
+ const subscribed=!!connection.rows[0]?.notification_subscription_id;
+ const alerts:{
+  severity:'info'|'warning'|'critical';code:string;message:string
+ }[]=[];
+ if(activeKeys===0)alerts.push({severity:'info',code:'NO_KEYS',message:'Nenhuma chave de API ativa neste ambiente.'});
+ if(!linked)alerts.push({severity:'warning',code:'NO_GOTO',message:'GoTo Connect ainda não está configurada neste ambiente.'});
+ else if(!subscribed)alerts.push({severity:'warning',code:'NO_WEBHOOK',message:'A assinatura de notificações GoTo não está ativa.'});
+ if(deliveryFailures)alerts.push({severity:'critical',code:'WEBHOOK_FAILURES',message:deliveryFailures+' entregas de webhook falharam nos últimos 30 dias.'});
+ if(unresolved)alerts.push({severity:'warning',code:'AMBIGUOUS_CONFIRMATIONS',message:unresolved+' confirmações precisam de revisão manual.'});
+ res.json({active_keys:activeKeys,dead_deliveries:deliveryFailures,ambiguous_confirmations:unresolved,goto_connected:linked,goto_subscribed:subscribed,alerts});
+}));
 integrationAdminRouter.get('/keys',wrap(async(req,res)=>{
  const p=pageParams(req.query.page);
  const [items,total]=await Promise.all([
