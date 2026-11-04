@@ -75,7 +75,7 @@ const FILTER_CLAUSE=[
  "or coalesce(a.external_id,'') ilike $7)"
 ].join(' ');
 function params(f:FilterArgs){
- const escaped=f.search.replace(/[\\%_]/g,'\\ const escaped=f.search.replace(/[\\%_]/g,'\\$&');');
+ const escaped=f.search.replace(/[\\%_]/g,'\\$&');
  return [f.tenantId,f.start,f.end,f.kind,f.status,f.search,'%'+escaped+'%'];
 }
 async function context(req:import('express').Request){
