@@ -194,7 +194,7 @@ export function Reports(){
     <Trend summary={summary}/>
     <Card className="report-rate-card">
      <div className="report-card-head"><div><span className="report-eyebrow">ENTREGABILIDADE</span><h2>Saúde dos disparos</h2><p>Aceitos e entregues no período</p></div><CheckCheck size={21}/></div>
-     <div className="report-rate-value">{rate===null?'—':rate.toLocaleString('pt-BR',{maximumFractionDigits:1})+'%'}<span>Taxa de entrega</span></div>
+     <div className="report-rate-value">{rate==null?'—':rate.toLocaleString('pt-BR',{maximumFractionDigits:1})+'%'}<span>Taxa de entrega</span></div>
      <div className="report-rate-track"><span style={{width:(rate||0)+'%'}}/></div>
      <div className="report-rate-explanation">Entregues ÷ mensagens com registro de envio. Não inclui os lembretes ainda na fila.</div>
      <div className="report-rate-stats">
