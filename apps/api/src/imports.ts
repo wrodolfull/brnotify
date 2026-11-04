@@ -1,4 +1,5 @@
 import ExcelJS from 'exceljs';
+import crypto from 'node:crypto';
 import type {Request,Response} from 'express';
 import {query} from './db.js';
 import {segments} from './segments.js';
@@ -77,20 +78,23 @@ export async function importHandler(req:Request,res:Response,dryRun:boolean){
   }catch(e){failures.push({row:row.line,error:e instanceof Error?e.message:'Linha inválida'})}
  }
  if(dryRun)return res.json({total:rows.length,valid:valid.length,invalid:failures.length,truncated,errors:failures.slice(0,100),preview:valid.slice(0,5)});
- let imported=0;
+ let imported=0,skipped=0;
  for(const row of valid){
   try{
    const contact=await query(
     "insert into contacts(tenant_id,name,phone,email,consent,consent_source,consent_at) values($1,$2,$3,$4,true,$5,now()) on conflict(tenant_id,phone) do update set name=excluded.name,email=excluded.email,updated_at=now() returning id",
     [req.tenantId,row.name,row.phone,row.email||null,row.consentSource]
    );
+   const importKey=crypto.createHash('sha256').update([row.phone,row.label,row.title,row.startsAt].join('|')).digest('hex');
+   const duplicate=await query('select 1 from events where tenant_id=$1 and import_key=$2',[req.tenantId,importKey]);
+   if(duplicate.rowCount){skipped++;continue}
    const record=await query('insert into records(tenant_id,contact_id,label,kind,details) values($1,$2,$3,$4,$5) returning id',[req.tenantId,contact.rows[0].id,row.label,segment,JSON.stringify(row.fields)]);
-   const ev=await query('insert into events(tenant_id,contact_id,record_id,title,event_type,starts_at,reminder_overrides) values($1,$2,$3,$4,$5,$6,$7) returning id',[req.tenantId,contact.rows[0].id,record.rows[0].id,row.title,row.title,row.startsAt,row.reminders?JSON.stringify(row.reminders):null]);
+   const ev=await query('insert into events(tenant_id,contact_id,record_id,title,event_type,starts_at,reminder_overrides,import_key) values($1,$2,$3,$4,$5,$6,$7,$8) returning id',[req.tenantId,contact.rows[0].id,record.rows[0].id,row.title,row.title,row.startsAt,row.reminders?JSON.stringify(row.reminders):null,importKey]);
    await rebuildEvent(req.tenantId!,ev.rows[0].id);imported++;
   }catch(e){failures.push({row:imported+2,error:e instanceof Error?e.message:'Falha de persistência'})}
  }
  await query('insert into import_jobs(tenant_id,file_name,imported,rejected,errors) values($1,$2,$3,$4,$5)',[req.tenantId,req.file.originalname,imported,failures.length,JSON.stringify(failures.slice(0,100))]);
- return res.json({total:rows.length,imported,rejected:failures.length,truncated,errors:failures.slice(0,100)});
+ return res.json({total:rows.length,imported,skipped,rejected:failures.length,truncated,errors:failures.slice(0,100)});
 }
 export async function downloadTemplate(req:Request,res:Response){
  const t=await query('select segment from tenants where id=$1',[req.tenantId]);

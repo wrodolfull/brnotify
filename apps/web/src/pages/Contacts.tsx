@@ -4,8 +4,14 @@ import {useApp} from '../context';
 import {Button,Card,Empty,ErrorHint,Input,Modal,NewButton,PageTitle,Pagination,SearchBox,SubmitRow,formValues,useList} from '../components';
 import {fmtDate} from '../api';
 
+const modelFields:Record<string,[string,string][]> = {
+ automotive:[['brand','Marca'],['model','Modelo'],['plate','Placa'],['year','Ano'],['mileage','Quilometragem']],
+ clinic:[['professional','Profissional'],['unit','Unidade'],['procedure','Procedimento']],
+ pet:[['pet_name','Nome do pet'],['species','Espécie'],['breed','Raça']],
+ custom:[['description','Descrição']]
+};
 export function Contacts(){
- const {api,role,notify}=useApp(),canEdit=role==='admin';
+ const {api,role,notify,segment}=useApp(),canEdit=role==='admin';
  const [q,setQ]=useState(''),[modal,setModal]=useState(false),[selected,setSelected]=useState<any>(null),[records,setRecords]=useState<any[]>([]),[events,setEvents]=useState<any[]>([]),[recordModal,setRecordModal]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState('');
  const list=useList('/api/contacts?q='+encodeURIComponent(q));
  const open=async(c:any)=>{setSelected(c);setRecords([]);setEvents([]);const [a,b]=await Promise.all([api('/api/records?contact_id='+c.id),api('/api/events?contact_id='+c.id)]);setRecords(a.items);setEvents(b.items)};
@@ -14,7 +20,8 @@ export function Contacts(){
   notify('Contato cadastrado');setModal(false);list.refresh()
  }catch(e:any){setError(e.message)}finally{setBusy(false)}};
  const addRecord=async(e:FormEvent<HTMLFormElement>)=>{e.preventDefault();setBusy(true);setError('');const v=formValues(e);try{
-  await api('/api/records',{method:'POST',body:JSON.stringify({contact_id:selected.id,label:v.label,kind:v.kind,details:{description:v.description}})});
+  const details=Object.fromEntries((modelFields[segment]||[]).filter(([key])=>!!v[key]).map(([key])=>[key,v[key]]));
+  await api('/api/records',{method:'POST',body:JSON.stringify({contact_id:selected.id,label:v.label,kind:segment,details})});
   notify('Registro associado');setRecordModal(false);await open(selected)
  }catch(e:any){setError(e.message)}finally{setBusy(false)}};
  return <><PageTitle eyebrow="CADASTROS" title="Contatos" subtitle="Uma base organizada para todos os seus lembretes." action={canEdit?<NewButton onClick={()=>{setError('');setModal(true)}} label="Novo contato"/>:null}/>
@@ -27,6 +34,6 @@ export function Contacts(){
  <div className="detail-section"><div className="detail-heading"><h3>Registros associados</h3>{canEdit&&<button className="tiny-action" onClick={()=>{setError('');setRecordModal(true)}}><Plus size={15}/> Novo</button>}</div>{records.length?records.map(x=><div className="mini-line" key={x.id}><CarFront size={17}/><span>{x.label}</span></div>):<p className="muted">Nenhum registro associado.</p>}</div>
  <div className="detail-section"><div className="detail-heading"><h3>Eventos</h3></div>{events.length?events.map(x=><div className="mini-line" key={x.id}><CalendarDays size={17}/><span>{x.title}</span><small>{fmtDate(x.starts_at)}</small></div>):<p className="muted">Nenhum evento cadastrado.</p>}</div>
  </Modal>}
- {recordModal&&selected&&<Modal title="Novo registro associado" onClose={()=>setRecordModal(false)}><form onSubmit={addRecord} className="form-stack"><Input name="label" label="Identificação" placeholder="Ex.: Corolla / Rex / Consulta" required/><label className="field"><span>Categoria</span><select name="kind"><option value="generic">Geral</option><option value="vehicle">Veículo</option><option value="pet">Pet</option><option value="appointment">Atendimento</option></select></label><Input name="description" label="Descrição (opcional)"/><ErrorHint error={error}/><SubmitRow onCancel={()=>setRecordModal(false)} busy={busy}/></form></Modal>}
+ {recordModal&&selected&&<Modal title="Novo registro associado" onClose={()=>setRecordModal(false)}><form onSubmit={addRecord} className="form-stack"><Input name="label" label="Identificação" placeholder="Ex.: Corolla / Rex / Consulta" required/>{(modelFields[segment]||[]).map(([key,label])=><Input key={key} name={key} label={label+' (opcional)'}/>)}<ErrorHint error={error}/><SubmitRow onCancel={()=>setRecordModal(false)} busy={busy}/></form></Modal>}
  </>;
 }

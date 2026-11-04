@@ -15,7 +15,7 @@ export const authenticate=wrap(async(req,res,next)=>{
   const id=data.user.id;
   const [admin,member]=await Promise.all([
     query('select 1 from platform_admins where user_id=$1',[id]),
-    query('select m.tenant_id,m.role,t.name,t.status from tenant_members m join tenants t on t.id=m.tenant_id where m.user_id=$1 order by t.name',[id])
+    query('select m.tenant_id,m.role,t.name,t.segment,t.status from tenant_members m join tenants t on t.id=m.tenant_id where m.user_id=$1 order by t.name',[id])
   ]);
   if(!admin.rowCount && !member.rowCount)return res.status(403).json({error:'Acesso não provisionado pelo Super Admin'});
   req.actor={id,email:data.user.email||'',superAdmin:!!admin.rowCount,memberships:member.rows};

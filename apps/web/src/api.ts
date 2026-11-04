@@ -3,7 +3,7 @@ const url=import.meta.env.VITE_SUPABASE_URL||'';
 const anon=import.meta.env.VITE_SUPABASE_ANON_KEY||'';
 export const supabase=createClient(url,anon,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
 export const API_URL=import.meta.env.VITE_API_URL||'http://localhost:4000';
-export type Actor={id:string;email:string;superAdmin:boolean;memberships:{tenant_id:string;name:string;role:'admin'|'viewer';status:string}[]};
+export type Actor={id:string;email:string;superAdmin:boolean;memberships:{tenant_id:string;name:string;segment:string;role:'admin'|'viewer';status:string}[]};
 export type Requester=(path:string,options?:RequestInit,forceTenant?:string)=>Promise<any>;
 export async function callAPI(session:Session,path:string,tenantId:string,options:RequestInit={}):Promise<any>{
  const headers=new Headers(options.headers);

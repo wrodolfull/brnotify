@@ -44,9 +44,10 @@ function Workspace({session}:{session:Session}){
  const notify=useCallback((message:string,kind:'success'|'error'='success')=>setToast({message,kind}),[]);
  const selected=tenants.find(t=>(t.id||t.tenant_id)===tenantId);
  const tenantName=selected?.name||'Selecionar ambiente';
+ const segment=selected?.segment||actor?.memberships.find(m=>m.tenant_id===tenantId)?.segment||'custom';
  const isSuper=!!actor?.superAdmin;
  const role=selected?.role||actor?.memberships.find(m=>m.tenant_id===tenantId)?.role||'admin';
- const ctx=useMemo(()=>actor?{actor,tenantId,tenantName,role:role as 'admin'|'viewer',isSuper,api,notify,refresh}:null,[actor,tenantId,tenantName,role,isSuper,api,notify,refresh]);
+ const ctx=useMemo(()=>actor?{actor,tenantId,tenantName,segment,role:role as 'admin'|'viewer',isSuper,api,notify,refresh}:null,[actor,tenantId,tenantName,segment,role,isSuper,api,notify,refresh]);
  const changeTenant=(id:string)=>{setTenantId(id);localStorage.setItem('brnotify.tenant',id);navigate('/');setMenuOpen(false)};
  if(busy)return <Loader/>;
  if(fatal)return <div className="error-full"><h2>Acesso indisponível</h2><p>{fatal}</p><Button onClick={()=>supabase.auth.signOut()}>Sair</Button></div>;

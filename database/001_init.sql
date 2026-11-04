@@ -57,6 +57,7 @@ create table if not exists events (
   record_id uuid references records(id) on delete set null,
   title text not null,
   event_type text not null default 'reminder',
+  import_key text,
   starts_at timestamptz not null,
   status text not null default 'scheduled' check(status in ('scheduled','cancelled','completed')),
   details jsonb not null default '{}'::jsonb,
@@ -65,6 +66,7 @@ create table if not exists events (
   updated_at timestamptz not null default now()
 );
 create index if not exists events_tenant_start_idx on events(tenant_id,starts_at desc);
+create unique index if not exists events_tenant_import_key_idx on events(tenant_id,import_key) where import_key is not null;
 create table if not exists reminder_rules (
   tenant_id uuid not null references tenants(id) on delete cascade,
   slot integer not null check(slot between 1 and 3),
@@ -85,6 +87,7 @@ create table if not exists goto_connections (
   from_touchpoint text,
   updated_at timestamptz not null default now()
 );
+create unique index if not exists goto_account_key_idx on goto_connections(account_key) where account_key is not null;
 create table if not exists message_templates (
   id uuid primary key default gen_random_uuid(),
   tenant_id uuid not null references tenants(id) on delete cascade,
