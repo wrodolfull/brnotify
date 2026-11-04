@@ -9,7 +9,8 @@
     "typecheck": "tsc --noEmit",
     "start": "node dist/index.js",
     "worker": "node dist/worker.js",
-    "bootstrap": "tsx src/bootstrap.ts"
+    "bootstrap": "tsx src/bootstrap.ts",
+    "test": "tsx --test src/time.test.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.0",
