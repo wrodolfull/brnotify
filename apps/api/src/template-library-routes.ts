@@ -2,7 +2,7 @@ import {Router} from 'express';
 import {z} from 'zod';
 import {authenticate,tenant,activeTenant,wrap} from './auth.js';
 import {query,audit} from './db.js';
-import {TEMPLATE_LIBRARY,findPreset,suggestMapping} from './template-library.js';
+import {TEMPLATE_LIBRARY,findPreset,suggestMapping,mergePresetMapping} from './template-library.js';
 
 export const templateLibraryRouter=Router();
 templateLibraryRouter.use(authenticate,tenant());
@@ -60,7 +60,7 @@ templateLibraryRouter.post('/:id/apply',tenant(true),activeTenant,wrap(async(req
  const match=suggestMapping(preset,tpl.definition);
  if(!match.compatible)return res.status(409).json({error:'Estrutura do template diferente do modelo sugerido',issues:match.issues});
  const existing:Record<string,string>=tpl.variable_map||{};
- const merged=input.overwrite?{...existing,...match.suggested}:{...match.suggested,...existing};
+ const merged=mergePresetMapping(match.suggested,existing,input.overwrite);
  // Não escolhemos mídia de outra empresa: header.media continua pendente para o administrador.
  const updated=await query(
   'update message_templates set variable_map=$3,updated_at=now() where id=$1 and tenant_id=$2 returning id,name,variable_map',

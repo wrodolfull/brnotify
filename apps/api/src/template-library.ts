@@ -603,6 +603,12 @@ export const TEMPLATE_LIBRARY:readonly CatalogPreset[]=[
 ];
 export function findPreset(id:string){return TEMPLATE_LIBRARY.find(p=>p.id===id)||null;}
 export type MappingSuggestion={compatible:boolean;issues:string[];suggested:Record<string,string>;requiredMedia:boolean;manualFields:string[]};
+export function mergePresetMapping(suggested:Record<string,string>,current:Record<string,string>,overwrite=false){
+ return overwrite?{...current,...suggested}:{...suggested,...current};
+}
+function normalizedTemplateText(value:unknown){
+ return String(value??'').replace(/\{\{[^}]+\}\}/g,'{{}}').replace(/\s+/g,' ').trim().toLocaleLowerCase('pt-BR');
+}
 export function suggestMapping(preset:CatalogPreset,definition:Record<string,any>):MappingSuggestion{
  const issues:string[]=[],suggested:Record<string,string>={};
  const fields=templateFields(definition);
@@ -620,11 +626,21 @@ export function suggestMapping(preset:CatalogPreset,definition:Record<string,any
  const expectedBody=preset.variables.filter(v=>v.part==='body');
  const gotBody=fields.filter(f=>f.key.startsWith('body.')&&f.kind==='text');
  if(expectedBody.length!==gotBody.length)issues.push('Variáveis do corpo diferentes');
+ const bodyText=(section('body')?.components||[]).find((item:any)=>item.type==='text')?.attributes?.text;
+ if(normalizedTemplateText(bodyText)!==normalizedTemplateText(preset.body))
+  issues.push('Texto do corpo diferente do modelo');
+ if(preset.header?.type==='TEXT'){
+  const text=(section('header')?.components||[]).find((item:any)=>item.type==='text')?.attributes?.text;
+  if(normalizedTemplateText(text)!==normalizedTemplateText(preset.header.text))
+   issues.push('Texto do cabeçalho diferente do modelo');
+ }
  const btn=(section('buttons')?.components||[]) as Array<Record<string,any>>;
  if(btn.length!==preset.buttons.length)issues.push('Quantidade de botões diferente');
  for(const [index,wanted] of preset.buttons.entries()){
   if(!btn[index]||String(btn[index].attributes?.buttonType||'').toUpperCase()!==wanted.type)
    issues.push('Tipo do botão '+(index+1)+' diferente');
+  if(btn[index]?.attributes?.text&&String(btn[index].attributes.text).trim()!==wanted.text)
+   issues.push('Texto do botão '+(index+1)+' diferente');
   const expected=preset.variables.filter(v=>v.part==='button'&&v.buttonIndex===index);
   const actual=fields.filter(f=>f.key.startsWith('buttons.'+index+'.'));
   if(expected.length!==actual.length)issues.push('Parâmetros do botão '+(index+1)+' diferentes');
