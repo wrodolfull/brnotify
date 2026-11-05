@@ -125,7 +125,12 @@ export function ApiIntegrations(){
   </div>
   {loadingError&&<ErrorHint error={loadingError}/>}
   {tab==='keys'&&<Card>
-   <div className="card-heading"><div><h2>Credenciais de integração</h2><p>Crie uma chave por sistema e limite suas permissões.</p></div><Button onClick={()=>{setError('');setCreate('key')}}><Plus size={16}/> Nova chave</Button></div>
+   <div className="card-heading"><div><h2>Credenciais de integração</h2><p>Crie uma chave por sistema e limite suas permissões.</p></div>
+    <div className="button-row">
+     <Button secondary onClick={()=>{setError('');setScopes(['messages:send']);setCreate('key')}}>Token para URA</Button>
+     <Button onClick={()=>{setError('');setCreate('key')}}><Plus size={16}/> Nova chave</Button>
+    </div></div>
+    <p className="hint">Para uma URA GoTo, crie um token com apenas <code>messages:send</code>. Utilize-o no cabeçalho Authorization: Bearer, nunca na URL. A chamada HTTP é POST /v1/messages/send e não exige Call ID.</p>
    {keys.data.items.length?<div className="data-list">{keys.data.items.map((key:any)=><div className="data-row static-row" key={key.id}>
     <span className="event-icon"><KeyRound size={19}/></span>
     <span className="row-main"><strong>{key.label}</strong><small><code>{key.token_prefix}••••••</code> · {key.scopes.length} permissões · último uso {key.last_used_at?fmtDate(key.last_used_at,true):'nunca'}</small></span>
