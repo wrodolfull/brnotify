@@ -46,6 +46,8 @@ try{
  assert.equal(claims.filter(Boolean).length,1,'Concorrência em duas instâncias duplicou uma reserva');
  assert.equal(claims.find(Boolean)?.id,a.id);
  await query("update on_demand_messages set status='sent',locked_at=null where id=$1",[a.id]);
+ // Do not affect the existing dispatch pacing integration test later in CI.
+ await query("update goto_send_pacing set next_allowed_at='-infinity'::timestamptz where scope in ('global','tenant:'||$1::text)",[tenant]);
  // Existing opt-out must never be reactivated by IVR-provided consent=true.
  await query("update contacts set consent=false,opted_out_at=now() where tenant_id=$1 and phone=$2",[tenant,'+5519988887777']);
  await assert.rejects(()=>enqueueOnDemandMessage(tenant,key.rows[0].id,{...payload,name:'Outro nome'}),/opt-out/);
