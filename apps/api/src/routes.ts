@@ -2,10 +2,11 @@ import {Router} from 'express';
 import crypto from 'node:crypto';
 import multer from 'multer';
 import {z} from 'zod';
+import {ruleInput} from './rule-validation.js';
 import {query,pageParams,makeSlug,audit} from './db.js';
 import {authenticate,requireSuper,tenant,activeTenant,wrap,supabase} from './auth.js';
 import {segments} from './segments.js';
-import {phoneE164,toUTC,rebuildEvent} from './time.js';
+import {phoneE164,toUTC,rebuildEvent,previewEventDelivery} from './time.js';
 import {oauthURL,exchangeCode,encrypt,getAccessToken,syncTemplates} from './goto.js';
 import {importHandler,downloadTemplate} from './imports.js';
 import {handleGotoWebhook} from './scheduler.js';
@@ -24,14 +25,24 @@ const contactInput=z.object({
  name:str.min(2).max(180),phone:str.min(10).max(30),email:z.union([z.string().email(),z.literal('')]).optional(),
  consent:z.boolean().default(false),consent_source:str.max(200).optional(),custom_data:z.record(z.unknown()).optional(),reminder_overrides:z.record(z.unknown()).nullable().optional()
 });
-const eventInput=z.object({
+
+const eventFields=z.object({
  contact_id:uuid,record_id:uuid.nullish(),title:str.min(2).max(160),event_type:str.max(100).optional(),
- starts_at:str.min(10),confirmation_enabled:z.boolean().optional(),details:z.record(z.unknown()).optional(),reminder_overrides:z.record(z.unknown()).nullable().optional()
+ starts_at:str.min(10),confirmation_enabled:z.boolean().optional(),details:z.record(z.unknown()).optional(),
+ reminder_overrides:z.record(z.unknown()).nullable().optional(),
+ delivery_mode:z.enum(['automation','custom']).default('automation'),
+ custom_send_at:str.min(10).nullish(),custom_template_id:uuid.nullish()
 });
-const ruleInput=z.array(z.object({
- slot:z.number().int().min(1).max(3),enabled:z.boolean(),offset_value:z.number().int().min(1).max(365),
- offset_unit:z.enum(['days','weeks','months']),send_time:z.string().regex(/^\d{2}:\d{2}$/),template_id:uuid.nullable().optional()
-})).length(3);
+const eventInput=eventFields.superRefine((x,ctx)=>{
+ if(x.delivery_mode==='custom'&&(!x.custom_send_at||!x.custom_template_id))
+  ctx.addIssue({code:z.ZodIssueCode.custom,message:'Informe data, hora e template aprovado para o envio personalizado'});
+});
+const eventPreviewInput=eventFields.pick({
+ contact_id:true,starts_at:true,reminder_overrides:true,delivery_mode:true,custom_send_at:true,custom_template_id:true
+}).superRefine((x,ctx)=>{
+ if(x.delivery_mode==='custom'&&(!x.custom_send_at||!x.custom_template_id))
+  ctx.addIssue({code:z.ZodIssueCode.custom,message:'Selecione data, hora e template para visualizar o disparo'});
+});
 const deny=(req:any,res:any)=>{if(!req.actor?.superAdmin)return res.status(403).json({error:'Somente Super Admin'});};
 
 router.get('/health',(_req,res)=>res.json({ok:true,app:'brnotify-api'}));
@@ -195,44 +206,90 @@ router.get('/api/events',tenant(),wrap(async(req,res)=>{
  const total=await query('select count(*)::int n from events where tenant_id=$1 and ($2::uuid is null or contact_id=$2)',[req.tenantId,id]);
  res.json({items:items.rows,total:total.rows[0].n,page:p.page,pages:Math.ceil(total.rows[0].n/20)});
 }));
+router.post('/api/events/preview',tenant(),wrap(async(req,res)=>{
+ const input=eventPreviewInput.parse(req.body);
+ const plan=await previewEventDelivery(req.tenantId!,{
+  contact_id:input.contact_id,starts_at:input.starts_at,delivery_mode:input.delivery_mode,
+  custom_send_at:input.custom_send_at,custom_template_id:input.custom_template_id,
+  reminder_overrides:input.reminder_overrides
+ });
+ if(!plan)return res.status(404).json({error:'Contato ou ambiente não encontrado'});
+ res.json(plan);
+}));
+
+router.get('/api/events/:id/notifications',tenant(),wrap(async(req,res)=>{
+ const id=uuid.parse(req.params.id);
+ const event=await query('select id from events where tenant_id=$1 and id=$2',[req.tenantId,id]);
+ if(!event.rowCount)return res.status(404).json({error:'Evento não encontrado'});
+ const result=await query(
+  'select m.id,m.slot,m.status,m.scheduled_at,m.sent_at,m.goto_message_id,m.attempt_count,m.error_code,m.error_description,m.schedule_revision,mt.name as template_name from scheduled_messages m left join message_templates mt on mt.id=m.template_id and mt.tenant_id=m.tenant_id where m.tenant_id=$1 and m.event_id=$2 order by m.schedule_revision desc,m.slot',
+  [req.tenantId,id]
+ );
+ res.json({items:result.rows});
+}));
+
 router.post('/api/events',tenant(true),activeTenant,wrap(async(req,res)=>{
  const input=eventInput.parse(req.body),t=await query('select timezone from tenants where id=$1',[req.tenantId]);
  const ct=await query('select id from contacts where tenant_id=$1 and id=$2',[req.tenantId,input.contact_id]);
  if(!ct.rowCount)return res.status(404).json({error:'Contato não encontrado'});
+ const plan=await previewEventDelivery(req.tenantId!,{
+  contact_id:input.contact_id,starts_at:input.starts_at,delivery_mode:input.delivery_mode,
+  custom_send_at:input.custom_send_at,custom_template_id:input.custom_template_id,
+  reminder_overrides:input.reminder_overrides
+ });
+ if(input.delivery_mode==='custom'&&!plan?.can_schedule)
+  return res.status(422).json({error:plan?.warnings.join(' ')||'Não foi possível programar o WhatsApp personalizado'});
  if(input.record_id){
   const r=await query('select 1 from records where tenant_id=$1 and id=$2 and contact_id=$3',[req.tenantId,input.record_id,input.contact_id]);
   if(!r.rowCount)return res.status(422).json({error:'Registro não pertence ao contato'});
  }
  const saved=await query(
-  'insert into events(tenant_id,contact_id,record_id,title,event_type,starts_at,details,reminder_overrides,confirmation_enabled,confirmation_status) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) returning *',
-  [req.tenantId,input.contact_id,input.record_id||null,input.title,input.event_type||'reminder',toUTC(input.starts_at,t.rows[0].timezone),JSON.stringify(input.details||{}),input.reminder_overrides?JSON.stringify(input.reminder_overrides):null,input.confirmation_enabled??false,input.confirmation_enabled?'pending':'not_requested']
+  'insert into events(tenant_id,contact_id,record_id,title,event_type,starts_at,details,reminder_overrides,confirmation_enabled,confirmation_status,delivery_mode,custom_send_at,custom_template_id) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) returning *',
+  [req.tenantId,input.contact_id,input.record_id||null,input.title,input.event_type||'reminder',toUTC(input.starts_at,t.rows[0].timezone),JSON.stringify(input.details||{}),input.reminder_overrides?JSON.stringify(input.reminder_overrides):null,input.confirmation_enabled??false,input.confirmation_enabled?'pending':'not_requested',
+   input.delivery_mode,input.delivery_mode==='custom'?toUTC(input.custom_send_at!,t.rows[0].timezone):null,input.delivery_mode==='custom'?input.custom_template_id:null]
  );
  await rebuildEvent(req.tenantId!,saved.rows[0].id);
  const q=await query("select count(*)::int as n from scheduled_messages where tenant_id=$1 and event_id=$2 and status='scheduled'",[req.tenantId,saved.rows[0].id]);
  const reminders_scheduled=Number(q.rows[0]?.n||0);
  await audit(req.tenantId!,req.actor!.id,'event.created',{id:saved.rows[0].id,reminders_scheduled});
- res.status(201).json({...saved.rows[0],reminders_scheduled});
+ res.status(201).json({...saved.rows[0],reminders_scheduled,dispatch_preview:plan});
 }));
 router.patch('/api/events/:id',tenant(true),activeTenant,wrap(async(req,res)=>{
- const input=eventInput.omit({contact_id:true,record_id:true}).partial().extend({status:z.enum(['scheduled','cancelled','completed']).optional()}).parse(req.body);
+ const input=eventFields.omit({contact_id:true,record_id:true,delivery_mode:true}).partial()
+  .extend({delivery_mode:z.enum(['automation','custom']).optional(),status:z.enum(['scheduled','cancelled','completed']).optional()}).parse(req.body);
  const old=await query('select * from events where tenant_id=$1 and id=$2',[req.tenantId,uuid.parse(req.params.id)]);
  if(!old.rowCount)return res.status(404).json({error:'Evento não encontrado'});
  const t=await query('select timezone from tenants where id=$1',[req.tenantId]);
  const ev=old.rows[0];
  const nextDate=input.starts_at?toUTC(input.starts_at,t.rows[0].timezone):ev.starts_at;
  const changed=new Date(nextDate).getTime()!==new Date(ev.starts_at).getTime();
+ const nextMode=input.delivery_mode||ev.delivery_mode||'automation';
+ const nextSendAt=nextMode==='custom'?(input.custom_send_at?toUTC(input.custom_send_at,t.rows[0].timezone):ev.custom_send_at):null;
+ const nextTemplateId=nextMode==='custom'?(input.custom_template_id??ev.custom_template_id):null;
+ const deliveryChanged=nextMode!==ev.delivery_mode||
+  String(nextSendAt||'')!==String(ev.custom_send_at?.toISOString?.()||'')||
+  nextTemplateId!==ev.custom_template_id;
+ if(nextMode==='custom'&&(input.status??ev.status)==='scheduled'){
+  const preview=await previewEventDelivery(req.tenantId!,{
+   contact_id:ev.contact_id,starts_at:input.starts_at||new Date(nextDate).toISOString(),delivery_mode:'custom',
+   custom_send_at:nextSendAt?new Date(nextSendAt).toISOString():null,custom_template_id:nextTemplateId
+  });
+  // Existing, already-sent custom notifications must not be revalidated on unrelated edits.
+  if((changed||deliveryChanged)&&!preview?.can_schedule)
+   return res.status(422).json({error:preview?.warnings.join(' ')||'Envio personalizado inválido'});
+ }
  const enabled=input.confirmation_enabled??ev.confirmation_enabled;
  const nextConfirmation=enabled?(changed||!ev.confirmation_enabled?'pending':ev.confirmation_status):'not_requested';
  const saved=await query(
-  'update events set title=$3,event_type=$4,starts_at=$5,status=$6,details=$7,reminder_overrides=$8,confirmation_enabled=$9,confirmation_status=$10,confirmation_received_at=case when $11 then null else confirmation_received_at end,schedule_revision=schedule_revision+case when $11 then 1 else 0 end,updated_at=now() where tenant_id=$1 and id=$2 returning *',
-  [req.tenantId,ev.id,input.title??ev.title,input.event_type??ev.event_type,nextDate,input.status??ev.status,JSON.stringify(input.details??ev.details),input.reminder_overrides===undefined?ev.reminder_overrides:JSON.stringify(input.reminder_overrides),enabled,nextConfirmation,changed]
+  'update events set title=$3,event_type=$4,starts_at=$5,status=$6,details=$7,reminder_overrides=$8,confirmation_enabled=$9,confirmation_status=$10,confirmation_received_at=case when $11 then null else confirmation_received_at end,schedule_revision=schedule_revision+case when $12 then 1 else 0 end,delivery_mode=$13,custom_send_at=$14,custom_template_id=$15,updated_at=now() where tenant_id=$1 and id=$2 returning *',
+  [req.tenantId,ev.id,input.title??ev.title,input.event_type??ev.event_type,nextDate,input.status??ev.status,JSON.stringify(input.details??ev.details),input.reminder_overrides===undefined?ev.reminder_overrides:JSON.stringify(input.reminder_overrides),enabled,nextConfirmation,changed,changed||deliveryChanged,nextMode,nextSendAt,nextTemplateId]
  );
  await rebuildEvent(req.tenantId!,ev.id);await audit(req.tenantId!,req.actor!.id,'event.updated',{id:ev.id});
  res.json(saved.rows[0]);
 }));
 router.get('/api/reminder-rules',tenant(),wrap(async(req,res)=>{
  const result=await query('select * from reminder_rules where tenant_id=$1 order by slot',[req.tenantId]);
- res.json(result.rows);
+ res.json(result.rows.map(row=>({...row,send_time:String(row.send_time).slice(0,5)})));
 }));
 router.put('/api/reminder-rules',tenant(true),activeTenant,wrap(async(req,res)=>{
  const rules=ruleInput.parse(req.body);
@@ -264,6 +321,11 @@ router.post('/api/messages/:id/retry',tenant(true),activeTenant,wrap(async(req,r
  await audit(req.tenantId!,req.actor!.id,'message.retried',{id:req.params.id});
  res.json({success:true});
 }));
+router.get('/api/templates/options',tenant(),wrap(async(req,res)=>{
+ const result=await query("select id,name,language_code from message_templates where tenant_id=$1 and status='APPROVED' order by name,language_code",[req.tenantId]);
+ res.json({items:result.rows});
+}));
+
 router.get('/api/templates',tenant(),wrap(async(req,res)=>{
  const p=pageParams(req.query.page);
  const items=await query('select id,name,language_code,status,category,definition,variable_map from message_templates where tenant_id=$1 order by name limit 20 offset $2',[req.tenantId,p.offset]);

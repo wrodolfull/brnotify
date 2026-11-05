@@ -13,3 +13,26 @@
 @media(max-width:1250px){.metrics-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.page-content{padding:30px}.rule-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:950px){.dashboard-grid{grid-template-columns:1fr}.import-grid,.settings-grid{grid-template-columns:1fr}.template-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.page-content{padding:27px}}
 @media(max-width:760px){.sidebar{transform:translateX(-102%);transition:transform .2s;width:min(85vw,290px)}.sidebar-open{transform:translateX(0)}.sidebar-close{display:grid}.mobile-scrim{display:block;position:fixed;z-index:35;inset:0;background:rgba(0,0,0,.48);border:0;width:100%;height:100%}.main-shell{margin-left:0}.topbar{height:65px;padding:0 19px}.mobile-menu{display:grid;place-items:center;color:#222b38}.topbar-breadcrumb{margin-right:auto;font-size:11px}.topbar-breadcrumb>span:first-child,.divider-dot{display:none}.topbar-env{display:none}.page-content{padding:26px 17px 70px}.page-heading{align-items:flex-start}.page-heading h1{font-size:27px}.page-heading p{font-size:12px}.card{padding:18px;border-radius:12px}.metrics-grid{gap:10px}.metric-card{min-height:146px}.metric-value{font-size:34px}.metric-top span{font-size:11px}.metric-foot{font-size:9px}.rule-grid{grid-template-columns:1fr}.form-grid{grid-template-columns:1fr}.toolbar{flex-wrap:wrap}.event-date{display:none}.data-row{gap:9px}.row-main small{font-size:10px}.data-row>.status{max-width:90px;overflow:hidden;text-overflow:ellipsis}.consent-pill{max-width:74px;text-align:right;white-space:normal}.message-row{flex-wrap:wrap}.message-row>.button{margin-left:47px}.template-grid{grid-template-columns:1fr 1fr}.segment-picker{grid-template-columns:repeat(2,1fr)}.modal-shade{align-items:flex-end;padding:0}.modal{width:100%;max-height:94vh;border-radius:19px 19px 0 0;padding:23px 19px 30px}.page-action .button{min-height:39px;padding:8px 10px}.page-action .button{font-size:11px}.topbar-avatar{width:31px;height:31px}.import-stats{gap:5px}.import-stats div{padding:10px}.import-stats strong{font-size:20px}}
 @media(max-width:410px){.page-heading{flex-direction:column;align-items:stretch;gap:14px}.page-action .button{width:100%}.metric-card{padding:13px}.metric-top svg{width:16px}.template-grid{grid-template-columns:1fr}.mapping-row{grid-template-columns:1fr;gap:5px}.data-row{padding:13px 0}}
+
+/* Event reminder mode and schedule preview. */
+.event-delivery-panel{display:flex;flex-direction:column;gap:10px;padding:16px;border:1px solid #e7ecf3;border-radius:13px}
+.event-delivery-panel h3,.event-preview h3,.event-notification-details h3{font-size:14px;font-weight:750;margin:0}
+.event-mode-option{display:flex;align-items:flex-start;gap:10px;border:1px solid #e5eaf1;border-radius:12px;padding:12px;cursor:pointer}
+.event-mode-option input{margin-top:4px;accent-color:#327cf3}
+.event-mode-option span{display:flex;flex-direction:column;gap:3px}
+.event-mode-option strong{font-size:12px;color:#263647}
+.event-mode-option small{font-size:11px;color:#7b899b;line-height:1.5}
+.event-mode-active{border-color:#78a7f6;background:#f5f8ff}
+.event-custom-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:7px}
+.event-custom-fields p{grid-column:1/-1;margin:0}
+.event-preview{padding:16px;border:1px solid #e5eaf1;border-radius:12px;background:#f9fbfe;display:flex;flex-direction:column;gap:8px}
+.event-preview>strong{font-size:12px;color:#203e65}
+.event-preview-row{display:flex;align-items:center;gap:9px;font-size:12px;color:#364c65}
+.event-preview-warning{color:#9c4b35;font-size:11px;line-height:1.5;margin:0}
+.event-notification-details{border-top:1px solid #e9edf3;margin-top:15px;padding-top:15px}
+.event-notification-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.event-notification-row{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;border-top:1px solid #eef1f4;padding:12px 0;margin-top:9px}
+.event-notification-row>div{display:flex;flex-direction:column;gap:4px}
+.event-notification-row strong{font-size:12px}
+.event-notification-row small{font-size:11px;color:#798697}
+@media(max-width:650px){.event-custom-fields{grid-template-columns:1fr}}

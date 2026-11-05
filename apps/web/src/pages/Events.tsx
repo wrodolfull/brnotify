@@ -4,41 +4,225 @@ import {useApp} from '../context';
 import {Button,Card,Empty,ErrorHint,Input,Modal,NewButton,PageTitle,Pagination,Status,SubmitRow,formValues,useList} from '../components';
 import {fmtDate} from '../api';
 
+type DeliveryMode='automation'|'custom';
+type RuleOverride={enabled:boolean;offset_value:number;offset_unit:'days'|'weeks'|'months'};
+type Preview={delivery_mode:DeliveryMode;can_schedule:boolean;reminders:{slot:number;scheduled_at:string;template_id:string;template_name:string}[];warnings:string[];timezone:string};
+const initialSlots:RuleOverride[]=[
+ {enabled:true,offset_value:1,offset_unit:'months'},
+ {enabled:true,offset_value:3,offset_unit:'days'},
+ {enabled:true,offset_value:1,offset_unit:'days'}
+];
+
 export function Events(){
  const {api,role,notify}=useApp(),canEdit=role==='admin';
  const list=useList('/api/events');
- const [modal,setModal]=useState(false),[contacts,setContacts]=useState<any[]>([]),[records,setRecords]=useState<any[]>([]),[contactId,setContactId]=useState(''),[search,setSearch]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState('');
- const [selected,setSelected]=useState<any>(null);
- const [overrides,setOverrides]=useState(false),[slots,setSlots]=useState<{enabled:boolean;offset_value:number;offset_unit:'days'|'weeks'|'months'}[]>([{enabled:true,offset_value:1,offset_unit:'months'},{enabled:true,offset_value:3,offset_unit:'days'},{enabled:true,offset_value:1,offset_unit:'days'}]);
- const loadContacts=async(q:string)=>{try{const r=await api('/api/contacts?q='+encodeURIComponent(q));setContacts(r.items)}catch(e:any){setError(e.message)}};
- useEffect(()=>{if(modal)loadContacts(search)},[modal,search]);
- useEffect(()=>{if(!contactId){setRecords([]);return}api('/api/records?contact_id='+contactId).then(r=>setRecords(r.items||[])).catch(()=>setRecords([]))},[contactId,api]);
+ const [modal,setModal]=useState(false),[contacts,setContacts]=useState<any[]>([]),[records,setRecords]=useState<any[]>([]);
+ const [contactId,setContactId]=useState(''),[search,setSearch]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState('');
+ const [selected,setSelected]=useState<any>(null),[notifications,setNotifications]=useState<any[]>([]),[notificationsLoading,setNotificationsLoading]=useState(false),[notificationsError,setNotificationsError]=useState('');
+ const [overrides,setOverrides]=useState(false),[slots,setSlots]=useState<RuleOverride[]>(initialSlots);
+ const [deliveryMode,setDeliveryMode]=useState<DeliveryMode>('automation');
+ const [eventStart,setEventStart]=useState(''),[customSendAt,setCustomSendAt]=useState(''),[customTemplateId,setCustomTemplateId]=useState('');
+ const [templates,setTemplates]=useState<{id:string;name:string;language_code:string}[]>([]);
+ const [preview,setPreview]=useState<Preview|null>(null),[previewLoading,setPreviewLoading]=useState(false),[previewError,setPreviewError]=useState('');
+
+ const overridePayload=()=>overrides&&deliveryMode==='automation'?
+  Object.fromEntries(slots.map((slot,i)=>[String(i+1),slot])):null;
+
+ const loadContacts=async(q:string)=>{try{const r=await api('/api/contacts?q='+encodeURIComponent(q));setContacts(r.items||[])}catch(e:any){setError(e.message)}};
+ useEffect(()=>{if(modal)void loadContacts(search)},[modal,search,api]);
+ useEffect(()=>{
+  if(!modal)return;
+  let active=true;
+  api('/api/templates/options').then(r=>{if(active)setTemplates(r.items||[])}).catch(e=>{if(active)setError(e.message)});
+  return()=>{active=false};
+ },[modal,api]);
+ useEffect(()=>{
+  if(!contactId){setRecords([]);return}
+  let active=true;
+  api('/api/records?contact_id='+contactId).then(r=>{if(active)setRecords(r.items||[])}).catch(()=>{if(active)setRecords([])});
+  return()=>{active=false};
+ },[contactId,api]);
+ useEffect(()=>{
+  if(!selected){setNotifications([]);setNotificationsError('');return}
+  let active=true;
+  setNotifications([]);setNotificationsLoading(true);setNotificationsError('');
+  api('/api/events/'+selected.id+'/notifications')
+   .then(r=>{if(active)setNotifications(r.items||[])})
+   .catch(e=>{if(active)setNotificationsError(e.message)})
+   .finally(()=>{if(active)setNotificationsLoading(false)});
+  return()=>{active=false};
+ },[selected?.id,api]);
+ useEffect(()=>{
+  if(!modal||!contactId||!eventStart||(deliveryMode==='custom'&&(!customSendAt||!customTemplateId))){
+   setPreview(null);setPreviewError('');setPreviewLoading(false);return;
+  }
+  let active=true;
+  setPreview(null);setPreviewError('');setPreviewLoading(true);
+  const timer=setTimeout(()=>{
+   api('/api/events/preview',{method:'POST',body:JSON.stringify({
+    contact_id:contactId,starts_at:eventStart,delivery_mode:deliveryMode,
+    ...(deliveryMode==='custom'?{custom_send_at:customSendAt,custom_template_id:customTemplateId}:{}),
+    reminder_overrides:overridePayload()
+   })}).then(result=>{if(active)setPreview(result)})
+    .catch(e=>{if(active)setPreviewError(e.message)})
+    .finally(()=>{if(active)setPreviewLoading(false)});
+  },350);
+  return()=>{active=false;clearTimeout(timer)};
+ },[modal,api,contactId,eventStart,deliveryMode,customSendAt,customTemplateId,overrides,slots]);
+
+ function openCreate(){
+  setModal(true);setError('');setSearch('');setContactId('');setEventStart('');setCustomSendAt('');
+  setCustomTemplateId('');setDeliveryMode('automation');setOverrides(false);setSlots(initialSlots);
+  setPreview(null);setPreviewError('');
+ }
  async function save(e:FormEvent<HTMLFormElement>){
-  e.preventDefault();setBusy(true);setError('');const v=formValues(e);
+  e.preventDefault();setBusy(true);setError('');
+  const v=formValues(e);
   try{
-   const reminder_overrides=overrides?Object.fromEntries(slots.map((slot,i)=>[String(i+1),slot])):null;
-   const result=await api('/api/events',{method:'POST',body:JSON.stringify({contact_id:v.contact_id,record_id:v.record_id||null,title:v.title,event_type:v.event_type,starts_at:v.starts_at,reminder_overrides,confirmation_enabled:v.confirmation_enabled==='on'})});
+   const result=await api('/api/events',{method:'POST',body:JSON.stringify({
+    contact_id:v.contact_id,record_id:v.record_id||null,title:v.title,
+    event_type:v.event_type,starts_at:eventStart,
+    reminder_overrides:overridePayload(),confirmation_enabled:v.confirmation_enabled==='on',
+    delivery_mode:deliveryMode,
+    ...(deliveryMode==='custom'?{custom_send_at:customSendAt,custom_template_id:customTemplateId}:{})
+   })});
    const count=Number(result.reminders_scheduled||0);
-   if(count>0)notify('Evento criado. '+count+' lembrete(s) programado(s).');
-   else notify('Evento criado, mas nenhum lembrete foi programado. Confira horário, antecedência e consentimento.','error');
-   setModal(false);list.refresh()
+   if(count>0)notify('Evento criado. '+count+' disparo(s) programado(s).');
+   else notify('Evento criado, mas nenhum WhatsApp foi programado. Verifique as regras e o consentimento.','error');
+   setModal(false);list.refresh();
   }catch(e:any){setError(e.message)}finally{setBusy(false)}
  }
  async function changeStatus(status:'cancelled'|'completed'){
-  try{await api('/api/events/'+selected.id,{method:'PATCH',body:JSON.stringify({status})});notify('Evento atualizado');setSelected(null);list.refresh()}catch(e:any){notify(e.message,'error')}
+  try{
+   await api('/api/events/'+selected.id,{method:'PATCH',body:JSON.stringify({status})});
+   notify('Evento atualizado');setSelected(null);list.refresh();
+  }catch(e:any){notify(e.message,'error')}
  }
- return <><PageTitle eyebrow="AGENDAMENTOS" title="Eventos" subtitle="Datas importantes que geram lembretes automaticamente." action={canEdit?<NewButton label="Novo evento" onClick={()=>{setError('');setModal(true)}}/>:null}/>
- <Card><div className="card-heading"><div><h2>Todos os eventos</h2><p>Ordenados pela data do agendamento</p></div><span className="toolbar-count">{list.data.total} eventos</span></div>
- {list.error&&<ErrorHint error={list.error}/>}
- {list.data.items.length?<div className="data-list">{list.data.items.map((e:any)=><button className="data-row" key={e.id} onClick={()=>setSelected(e)}><span className="event-icon"><CalendarDays size={20}/></span><span className="row-main"><strong>{e.title}</strong><small>{e.contact_name} · {e.record_label||'Sem registro adicional'}</small></span><span className="event-date">{fmtDate(e.starts_at,true)}</span><Status value={e.status==='scheduled'?'scheduled':e.status}/><ChevronRight size={18}/></button>)}</div>:!list.loading&&<Empty title="Ainda não há eventos" subtitle="Cadastre um evento com data e cliente para iniciar as automações."/>}
- <Pagination page={list.page} pages={list.data.pages} onChange={list.setPage}/></Card>
- {modal&&<Modal title="Agendar evento" onClose={()=>setModal(false)}><form className="form-stack" onSubmit={save}><label className="field"><span>Encontrar contato</span><div className="search-box"><Search size={17}/><input placeholder="Buscar por nome ou telefone" value={search} onChange={e=>setSearch(e.target.value)}/></div></label><label className="field"><span>Contato *</span><select name="contact_id" required defaultValue="" onChange={e=>setContactId(e.target.value)}><option value="" disabled>Selecione um contato</option>{contacts.map(c=><option value={c.id} key={c.id}>{c.name} · {c.phone}</option>)}</select></label><label className="field"><span>Registro associado (opcional)</span><select name="record_id"><option value="">Nenhum registro</option>{records.map(r=><option key={r.id} value={r.id}>{r.label}</option>)}</select></label><div className="form-grid"><Input name="title" label="Título do evento" required placeholder="Ex.: Revisão anual"/><Input name="event_type" label="Tipo de lembrete" placeholder="Revisão"/></div><Input name="starts_at" type="datetime-local" label="Data e hora do evento" required/>
- <div className="form-panel">
-  <label className="checkbox-row"><input type="checkbox" name="confirmation_enabled"/> Solicitar confirmação do agendamento pelo WhatsApp</label>
-  <p className="muted">Requer template GoTo aprovado com instruções de resposta, webhook INBOUND_MESSAGE ativo e apenas um evento pendente identificável para o contato.</p>
- </div>
- <div className="form-panel"><label className="checkbox-row"><input type="checkbox" checked={overrides} onChange={e=>setOverrides(e.target.checked)}/> Personalizar lembretes deste evento</label>{overrides&&<div className="override-row">{slots.map((slot,i)=><div key={i} className="override-item"><label className="checkbox-row"><input type="checkbox" checked={slot.enabled} onChange={e=>setSlots(s=>s.map((v,index)=>i===index?{...v,enabled:e.target.checked}:v))}/> Lembrete {i+1}</label>{slot.enabled&&<div className="form-grid"><label className="field"><span>Antecedência</span><input type="number" min={1} max={365} value={slot.offset_value} onChange={e=>setSlots(s=>s.map((v,index)=>i===index?{...v,offset_value:Number(e.target.value)}:v))}/></label><label className="field"><span>Unidade</span><select value={slot.offset_unit} onChange={e=>setSlots(s=>s.map((v,index)=>i===index?{...v,offset_unit:e.target.value as 'days'|'weeks'|'months'}:v))}><option value="days">Dias</option><option value="weeks">Semanas</option><option value="months">Meses</option></select></label></div>}</div>)}</div>}<p className="muted">Sem personalização, serão utilizadas as regras do ambiente.</p></div><ErrorHint error={error}/><SubmitRow onCancel={()=>setModal(false)} busy={busy} label="Criar evento"/></form></Modal>}
- {selected&&<Modal title="Evento" onClose={()=>setSelected(null)}><div className="detail-section"><h2>{selected.title}</h2><div className="mini-line"><UserRound size={17}/>{selected.contact_name}</div><div className="mini-line"><Clock3 size={17}/>{fmtDate(selected.starts_at,true)}</div><div className="mini-line">Status: <Status value={selected.status}/></div>
- <div className="mini-line">Confirmação: <strong>{({not_requested:'Não solicitada',pending:'Aguardando',confirmed:'Confirmado',reschedule_requested:'Solicitou reagendamento',declined:'Recusado'} as Record<string,string>)[selected.confirmation_status]||'—'}</strong></div></div>{canEdit&&selected.status==='scheduled'&&<footer className="form-footer"><Button secondary onClick={()=>changeStatus('cancelled')}>Cancelar evento</Button><Button onClick={()=>changeStatus('completed')}>Marcar concluído</Button></footer>}</Modal>}
+ const activeMessages=notifications.filter(m=>m.schedule_revision===selected?.schedule_revision);
+ return <>
+  <PageTitle eyebrow="AGENDAMENTOS" title="Eventos" subtitle="Registre compromissos e escolha quando o cliente receberá o WhatsApp."
+   action={canEdit?<NewButton label="Novo evento" onClick={openCreate}/>:null}/>
+  <Card>
+   <div className="card-heading"><div><h2>Todos os eventos</h2><p>Ordenados pela data do compromisso</p></div><span className="toolbar-count">{list.data.total} eventos</span></div>
+   {list.error&&<ErrorHint error={list.error}/>}
+   {list.data.items.length?<div className="data-list">{list.data.items.map((e:any)=>
+    <button className="data-row" key={e.id} onClick={()=>setSelected(e)}>
+     <span className="event-icon"><CalendarDays size={20}/></span>
+     <span className="row-main"><strong>{e.title}</strong><small>{e.contact_name} · {e.record_label||'Sem registro adicional'}</small></span>
+     <span className="event-date">{fmtDate(e.starts_at,true)}</span><Status value={e.status}/><ChevronRight size={18}/>
+    </button>)}</div>:!list.loading&&<Empty title="Ainda não há eventos" subtitle="Cadastre um compromisso para iniciar os lembretes."/>}
+   <Pagination page={list.page} pages={list.data.pages} onChange={list.setPage}/>
+  </Card>
+
+  {modal&&<Modal title="Agendar evento" onClose={()=>setModal(false)}>
+   <form className="form-stack" onSubmit={save}>
+    <label className="field"><span>Encontrar contato</span><div className="search-box"><Search size={17}/>
+     <input placeholder="Buscar por nome ou telefone" value={search} onChange={e=>setSearch(e.target.value)}/></div></label>
+    <label className="field"><span>Contato *</span><select name="contact_id" required value={contactId} onChange={e=>setContactId(e.target.value)}>
+     <option value="" disabled>Selecione um contato</option>
+     {contacts.map(c=><option value={c.id} key={c.id}>{c.name} · {c.phone}</option>)}
+    </select></label>
+    <label className="field"><span>Registro associado (opcional)</span><select name="record_id">
+     <option value="">Nenhum registro</option>
+     {records.map(r=><option key={r.id} value={r.id}>{r.label}</option>)}
+    </select></label>
+    <div className="form-grid"><Input name="title" label="Título do evento" required placeholder="Ex.: Revisão anual"/>
+     <Input name="event_type" label="Tipo de lembrete" placeholder="Revisão"/></div>
+    <label className="field"><span>Data e hora do compromisso *</span>
+     <input name="starts_at" type="datetime-local" required value={eventStart} onChange={e=>setEventStart(e.target.value)}/>
+    </label>
+    <div className="event-delivery-panel">
+     <h3>Quando enviar o WhatsApp?</h3>
+     <p className="muted">A data do compromisso não é necessariamente o horário do envio.</p>
+     <label className={'event-mode-option '+(deliveryMode==='automation'?'event-mode-active':'')}>
+      <input type="radio" name="delivery_option" value="automation" checked={deliveryMode==='automation'} onChange={()=>setDeliveryMode('automation')}/>
+      <span><strong>Usar regras de Automações</strong><small>Enviar antes do compromisso, conforme as regras e os templates configurados no ambiente.</small></span>
+     </label>
+     <label className={'event-mode-option '+(deliveryMode==='custom'?'event-mode-active':'')}>
+      <input type="radio" name="delivery_option" value="custom" checked={deliveryMode==='custom'} onChange={()=>setDeliveryMode('custom')}/>
+      <span><strong>Escolher data e hora do envio</strong><small>Programar um WhatsApp específico, inclusive para daqui a poucos minutos.</small></span>
+     </label>
+     {deliveryMode==='custom'&&<div className="event-custom-fields">
+      <label className="field"><span>Data e hora do disparo *</span>
+       <input type="datetime-local" required value={customSendAt} onChange={e=>setCustomSendAt(e.target.value)}/>
+      </label>
+      <label className="field"><span>Template aprovado *</span>
+       <select required value={customTemplateId} onChange={e=>setCustomTemplateId(e.target.value)}>
+        <option value="">Selecione o template do WhatsApp</option>
+        {templates.map(t=><option value={t.id} key={t.id}>{t.name} ({t.language_code})</option>)}
+       </select>
+      </label>
+      <p className="muted">O envio deve ocorrer antes do compromisso. O contato precisa ter consentimento registrado.</p>
+     </div>}
+    </div>
+    {deliveryMode==='automation'&&<div className="form-panel">
+     <label className="checkbox-row"><input type="checkbox" checked={overrides} onChange={e=>setOverrides(e.target.checked)}/>
+      Personalizar antecedência deste evento</label>
+     {overrides&&<div className="override-row">{slots.map((slot,i)=><div key={i} className="override-item">
+      <label className="checkbox-row"><input type="checkbox" checked={slot.enabled}
+       onChange={e=>setSlots(rows=>rows.map((r,j)=>i===j?{...r,enabled:e.target.checked}:r))}/>Lembrete {i+1}</label>
+      {slot.enabled&&<div className="form-grid">
+       <label className="field"><span>Antecedência</span><input type="number" min={1} max={365} value={slot.offset_value}
+        onChange={e=>setSlots(rows=>rows.map((r,j)=>i===j?{...r,offset_value:Number(e.target.value)}:r))}/></label>
+       <label className="field"><span>Unidade</span><select value={slot.offset_unit}
+        onChange={e=>setSlots(rows=>rows.map((r,j)=>i===j?{...r,offset_unit:e.target.value as RuleOverride['offset_unit']}:r))}>
+        <option value="days">Dias antes</option><option value="weeks">Semanas antes</option><option value="months">Meses antes</option>
+       </select></label>
+      </div>}</div>)}</div>}
+     <p className="muted">Horário e template vêm das regras do ambiente; apenas a antecedência pode ser personalizada aqui.</p>
+    </div>}
+    <div className="form-panel">
+     <label className="checkbox-row"><input type="checkbox" name="confirmation_enabled"/> Solicitar confirmação do compromisso pelo WhatsApp</label>
+     <p className="muted">A resposta exige um template apropriado e webhook INBOUND_MESSAGE ativo.</p>
+    </div>
+    <div className="event-preview" role="status" aria-live="polite">
+     <h3>Prévia dos disparos</h3>
+     {!contactId||!eventStart||(deliveryMode==='custom'&&(!customSendAt||!customTemplateId))?
+      <p className="muted">Informe o contato, o compromisso e a opção de envio para visualizar o agendamento.</p>:
+      previewLoading?<p className="muted">Calculando horários de envio...</p>:
+      previewError?<ErrorHint error={previewError}/>:
+      preview?<><strong>{preview.reminders.length?preview.reminders.length+' WhatsApp(s) programado(s)':'Nenhum WhatsApp será programado'}</strong>
+       {preview.reminders.map(reminder=><div className="event-preview-row" key={reminder.slot}>
+        <Clock3 size={16}/><span>{fmtDate(reminder.scheduled_at,true)} · {reminder.template_name}</span>
+       </div>)}
+       {preview.warnings.map((warning,i)=><p className="event-preview-warning" key={i}>{warning}</p>)}
+      </>:<p className="muted">Carregando prévia...</p>}
+    </div>
+    <ErrorHint error={error}/>
+    <SubmitRow onCancel={()=>setModal(false)} busy={busy||(deliveryMode==='custom'&&(!preview?.can_schedule||previewLoading||!!previewError))} label="Criar evento"/>
+   </form>
+  </Modal>}
+
+  {selected&&<Modal title="Evento" onClose={()=>setSelected(null)}>
+   <div className="detail-section">
+    <h2>{selected.title}</h2>
+    <div className="mini-line"><UserRound size={17}/>{selected.contact_name}</div>
+    <div className="mini-line"><CalendarDays size={17}/>{fmtDate(selected.starts_at,true)} (compromisso)</div>
+    <div className="mini-line">Status do evento: <Status value={selected.status}/></div>
+    <div className="mini-line">Modo: <strong>{selected.delivery_mode==='custom'?'Disparo personalizado':'Regras de Automações'}</strong></div>
+    <div className="mini-line">Confirmação: <strong>{({not_requested:'Não solicitada',pending:'Aguardando',confirmed:'Confirmado',reschedule_requested:'Solicitou reagendamento',declined:'Recusado'} as Record<string,string>)[selected.confirmation_status]||'—'}</strong></div>
+    <div className="event-notification-details">
+     <div className="event-notification-heading"><h3>WhatsApp / Disparos</h3>
+      <button type="button" className="text-link" onClick={()=>{
+       setNotificationsLoading(true);
+       api('/api/events/'+selected.id+'/notifications').then(r=>{setNotifications(r.items||[]);setNotificationsError('')}).catch(e=>setNotificationsError(e.message)).finally(()=>setNotificationsLoading(false));
+      }}>Atualizar status</button>
+     </div>
+     {notificationsLoading?<p className="muted">Carregando disparos...</p>:
+      notificationsError?<ErrorHint error={notificationsError}/>:
+      activeMessages.length?activeMessages.map((m:any)=><div className="event-notification-row" key={m.id}>
+       <div><strong>{m.template_name||'Template'}</strong>
+        <small>Envio previsto: {fmtDate(m.scheduled_at,true)}</small>
+        {m.sent_at&&<small>Aceito pela GoTo: {fmtDate(m.sent_at,true)}</small>}
+        {m.error_description&&<small className="event-preview-warning">{m.error_description}</small>}
+       </div><Status value={m.status}/></div>):
+      <p className="event-preview-warning">Nenhum WhatsApp programado para este evento. Confira a data, o consentimento e as regras.</p>}
+    </div>
+   </div>
+   {canEdit&&selected.status==='scheduled'&&<footer className="form-footer">
+    <Button secondary onClick={()=>changeStatus('cancelled')}>Cancelar evento</Button>
+    <Button onClick={()=>changeStatus('completed')}>Marcar concluído</Button>
+   </footer>}
+  </Modal>}
  </>;
 }

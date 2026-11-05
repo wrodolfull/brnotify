@@ -231,8 +231,18 @@ export async function saveReminder(tenantId:string,data:ReminderPayload,options:
   );
   const pending=planned.rows.filter(r=>r.status==='scheduled');
   if(options.requireDispatchReady){
-   if(!planned.rowCount)
+   if(!planned.rowCount){
+    // The scheduler no longer queues invalid, template-less messages.
+    // Preserve actionable strict-sync errors for integrations: distinguish
+    // missing/inactive rules from approved-template configuration.
+    const rules=await run(
+     'select r.enabled,r.template_id,mt.status as template_status from reminder_rules r left join message_templates mt on mt.id=r.template_id and mt.tenant_id=r.tenant_id where r.tenant_id=$1',
+     [tenantId]
+    );
+    if(rules.rows.some(r=>r.enabled&&(!r.template_id||r.template_status!=='APPROVED')))
+     throw new ApiOperationError(409,'Agendamento não sincronizado: vincule um template WhatsApp aprovado a cada lembrete habilitado no ambiente.');
     throw new ApiOperationError(409,'Agendamento não sincronizado: nenhuma regra gerou um lembrete futuro. Ajuste a antecedência e o horário das regras no BR Notify.');
+   }
    if(pending.some(r=>!r.template_id||r.template_status!=='APPROVED'))
     throw new ApiOperationError(409,'Agendamento não sincronizado: vincule um template WhatsApp aprovado a cada lembrete programado no ambiente.');
    if(pending.length){
