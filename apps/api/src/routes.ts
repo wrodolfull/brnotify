@@ -288,8 +288,11 @@ router.get('/api/messages',tenant(),wrap(async(req,res)=>{
  res.json({items:items.rows,total:total.rows[0].n,page:p.page,pages:Math.ceil(total.rows[0].n/20)});
 }));
 router.post('/api/messages/:id/retry',tenant(true),activeTenant,wrap(async(req,res)=>{
- const up=await query("update scheduled_messages set status='scheduled',scheduled_at=now(),error_code=null,error_description=null,updated_at=now() where id=$1 and tenant_id=$2 and status='failed' returning id",[uuid.parse(req.params.id),req.tenantId]);
- if(!up.rowCount)return res.status(409).json({error:'Somente falhas definitivas permitem reenvio manual; resultados indeterminados exigem conferência'});
+ const up=await query(
+  "update scheduled_messages m set status='scheduled',next_attempt_at=now(),error_code=null,error_description=null,updated_at=now() from events e join contacts c on c.id=e.contact_id and c.tenant_id=e.tenant_id where m.id=$1 and m.tenant_id=$2 and m.event_id=e.id and m.tenant_id=e.tenant_id and m.status='failed' and m.schedule_revision=e.schedule_revision and e.status='scheduled' and e.starts_at>now() and e.confirmation_status not in ('declined','reschedule_requested') and c.consent=true and c.opted_out_at is null returning m.id",
+  [uuid.parse(req.params.id),req.tenantId]
+ );
+ if(!up.rowCount)return res.status(409).json({error:'Reenvio somente para falhas definitivas de eventos futuros e contatos autorizados; resultados indeterminados exigem conferência'});
  await audit(req.tenantId!,req.actor!.id,'message.retried',{id:req.params.id});
  res.json({success:true});
 }));
