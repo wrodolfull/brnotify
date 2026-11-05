@@ -54,3 +54,7 @@ A integração suporta templates com imagens/vídeo/PDF no cabeçalho, botões c
 ## Biblioteca de modelos de WhatsApp
 
 Na integração GoTo Connect, a **Biblioteca de modelos** oferece 12 sugestões para cadastro manual na Meta, com variáveis, mídia, botões e mapeamento guiado após sincronização. Guia: [Biblioteca de modelos](docs/TEMPLATE_LIBRARY.md).
+
+## Segurança de disparos WhatsApp
+
+A fila usa cadência de 1–5 segundos por ambiente, reserva global no PostgreSQL, tratamento de 429 com Retry-After e revisão manual de erros indeterminados. Migração 006 obrigatória. [Guia de segurança dos disparos](docs/SAFE_DISPATCH.md).

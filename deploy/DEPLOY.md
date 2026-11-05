@@ -82,3 +82,7 @@ Leia o guia [API Pública](../docs/PUBLIC_API.md) para contratos e exemplos.
 ## Templates avançados GoTo
 
 Execute a migração `database/005_goto_rich_templates.sql` após a 004. Verifique o bucket privado `brnotify-goto-media` no Supabase Storage. Para configurar texto, mídia e botões, consulte [o guia](../docs/GOTO_RICH_TEMPLATES.md).
+
+## Atualização: cadência de disparos WhatsApp
+
+Pare o worker antes da atualização, execute `database/006_safe_message_dispatch.sql` no Supabase depois da 005, publique backend/worker juntos e reinicie o worker. Veja [Auditoria de disparos](../docs/SAFE_DISPATCH.md).
