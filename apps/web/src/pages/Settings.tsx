@@ -83,6 +83,7 @@ export function SettingsPage(){
  const [conn,setConn]=useState<any>(null);
  const [busy,setBusy]=useState(false);
  const [error,setError]=useState('');
+ const [syncNotice,setSyncNotice]=useState<{status:'success'|'error';text:string}|null>(null);
  const [selected,setSelected]=useState<any>(null);
  const [mapping,setMapping]=useState<Record<string,string>>({});
  const [testPhone,setTestPhone]=useState('');
@@ -94,7 +95,16 @@ export function SettingsPage(){
  const fields=selected?templateFields(selected.definition):[];
  const load=()=>api('/api/goto').then(setConn).catch((e:any)=>setError(e.message));
  useEffect(()=>{void load()},[api]);
- useEffect(()=>{if(params.get('goto')==='connected')notify('GoTo conectada. Configure a conta e o remetente.')},[params]);
+ useEffect(()=>{
+  if(params.get('goto')!=='connected')return;
+  const state=params.get('sync');
+  if(state==='success'){
+   const count=Number(params.get('count')||0);
+   setSyncNotice({status:'success',text:count===0?'GoTo reconectada. Nenhum template encontrado para este número.':'GoTo reconectada. '+count+' template(s) sincronizado(s).'});
+  }else if(state==='error'){
+   setSyncNotice({status:'error',text:'Conta conectada, mas a sincronização falhou. Tente novamente pelo botão abaixo.'});
+  }else notify('GoTo conectada. Configure a conta e o remetente.');
+ },[params,notify]);
  async function connect(){
   try{const result=await api('/api/goto/oauth/start');window.location.assign(result.url)}
   catch(e:any){notify(e.message,'error')}
@@ -102,11 +112,21 @@ export function SettingsPage(){
  async function saveConnection(e:FormEvent<HTMLFormElement>){
   e.preventDefault();setBusy(true);setError('');
   const values=new FormData(e.currentTarget);
+  setSyncNotice(null);
   try{
-   await api('/api/goto',{method:'PATCH',body:JSON.stringify({
+   const saved=await api('/api/goto',{method:'PATCH',body:JSON.stringify({
     account_key:values.get('account_key'),from_touchpoint:values.get('from_touchpoint')
    })});
-   notify('Configuração GoTo atualizada');await load();
+   if(saved.sync?.status==='success'){
+    const count=Number(saved.sync.count||0);
+    setSyncNotice({status:'success',text:count===0?'Integração salva. Nenhum template retornado pela GoTo para este número.':'Integração salva. '+count+' template(s) sincronizado(s) automaticamente.'});
+    notify('Integração salva e templates atualizados');
+   }else{
+    setSyncNotice({status:'error',text:'Integração salva. '+(saved.sync?.message||'A sincronização não foi concluída.')});
+    notify('Integração salva, mas a sincronização falhou.','error');
+   }
+   templates.refresh();
+   await load();
   }catch(e:any){setError(e.message)}finally{setBusy(false)}
  }
  async function subscribe(e:FormEvent<HTMLFormElement>){
@@ -121,8 +141,11 @@ export function SettingsPage(){
   setBusy(true);setError('');
   try{
    const data=await api('/api/goto/templates/sync',{method:'POST'});
-   notify(data.count+' templates sincronizados');templates.refresh();
-  }catch(e:any){setError(e.message)}finally{setBusy(false)}
+   const count=Number(data.count||0);
+   setSyncNotice({status:'success',text:count===0?'Nenhum template retornado pela GoTo para este número.':count+' template(s) sincronizado(s) com a GoTo.'});
+   notify(count+' templates sincronizados');templates.refresh();
+  }catch(e:any){setSyncNotice({status:'error',text:'Não foi possível sincronizar: '+e.message})}
+  finally{setBusy(false)}
  }
  function chooseTemplate(t:any){
   setSelected(t);setMapping(t.variable_map||{});setError('');setTestResult('');
@@ -186,7 +209,7 @@ export function SettingsPage(){
      {conn.connected&&<form className="form-stack integration-form" onSubmit={saveConnection}>
       <Input name="account_key" label="Account Key" required defaultValue={conn.account_key||''} key={'a'+conn.account_key}/>
       <Input name="from_touchpoint" label="ID do número WhatsApp na Meta" required defaultValue={conn.from_touchpoint||''} key={'f'+conn.from_touchpoint}/>
-      {canEdit&&<Button type="submit" disabled={busy}>Salvar integração</Button>}
+      {canEdit&&<Button type="submit" disabled={busy}>{busy?"Salvando e sincronizando...":"Salvar e sincronizar templates"}</Button>}
      </form>}
      {conn.connected&&canEdit&&<form className="form-stack integration-form" onSubmit={subscribe}>
       <Input name="channel_id" label="Notification Channel ID" placeholder="Webhook.xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" required defaultValue={conn.notification_channel_id||''}/>
@@ -214,9 +237,10 @@ export function SettingsPage(){
    <Link to="/template-library" className="goto-catalog-link">Explorar biblioteca</Link>
   </div>
   <Card>
-   <div className="card-heading"><div><h2>Templates do WhatsApp</h2><p>Selecione um template sincronizado para configurar cada componente.</p></div>
-   {canEdit&&<Button secondary onClick={sync} disabled={busy||!conn?.connected||!conn?.account_key||!conn?.from_touchpoint}>Sincronizar</Button>}
+   <div className="card-heading"><div><h2>Templates do WhatsApp</h2><p>Sincronização automática ao salvar os dados do WhatsApp. Atualização manual também disponível.</p></div>
+   {canEdit&&<Button secondary onClick={sync} disabled={busy||!conn?.connected||!conn?.account_key||!conn?.from_touchpoint}>Sincronizar novamente</Button>}
    </div>
+   {syncNotice&&<p role="status" className={'goto-sync-status '+(syncNotice.status==='error'?'goto-sync-error':'goto-sync-success')}>{syncNotice.text}</p>}
    {templates.data.items.length?<div className="template-grid">{templates.data.items.map((t:any)=>
     <button className={'template-card '+(selected?.id===t.id?'template-selected':'')} key={t.id} onClick={()=>chooseTemplate(t)}>
      <div><span className="goto-template-type">WhatsApp</span><Status value={t.status}/></div>

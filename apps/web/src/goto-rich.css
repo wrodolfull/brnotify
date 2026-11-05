@@ -52,3 +52,7 @@
  .goto-media-upload>.field{width:100%}
 }
 @media(max-width:420px){.goto-capabilities{grid-template-columns:1fr}}
+
+.goto-sync-status{font-size:11px;line-height:1.6;padding:10px 13px;margin:0 0 13px;border-radius:9px;background:#f5f7fa;color:#536375}
+.goto-sync-success{border-left:2px solid #409780}
+.goto-sync-error{border-left:2px solid #bb765d}
