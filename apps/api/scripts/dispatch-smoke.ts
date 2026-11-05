@@ -7,7 +7,7 @@ process.env.SUPABASE_URL='https://example.supabase.co';
 process.env.SUPABASE_SERVICE_ROLE_KEY='test-placeholder';
 process.env.TOKEN_ENCRYPTION_KEY='0'.repeat(64);
 const {query,pool}=await import('../src/db.js');
-const {claimNextDueMessage,deferAfterRateLimit,GLOBAL_MIN_DELAY_MS}=await import('../src/send-pacing.js');
+const {claimNextDueMessage,deferAfterRateLimit,expireStaleScheduledMessages,GLOBAL_MIN_DELAY_MS}=await import('../src/send-pacing.js');
 try{
  const tenant=await query("select id from tenants where slug='teste-ci'");
  assert.ok(tenant.rowCount,'Ambiente fixture inexistente');
@@ -22,6 +22,18 @@ try{
   "insert into scheduled_messages(tenant_id,event_id,slot,scheduled_at,attempt_count,schedule_revision,next_attempt_at) values($1,$2,3,now()-interval '1 minute',0,1,now()-interval '1 minute') returning id,scheduled_at",
   [tenantId,event.rows[0].id]
  );
+ const oldEvent=await query(
+  "insert into events(tenant_id,contact_id,title,starts_at,external_id) select tenant_id,contact_id,'Evento antigo',now()+interval '7 days','REV-CI-STALE' from events where id=$1 returning id",
+  [event.rows[0].id]
+ );
+ const oldMessage=await query(
+  "insert into scheduled_messages(tenant_id,event_id,slot,scheduled_at,schedule_revision,next_attempt_at) values($1,$2,1,now()-interval '3 days',1,now()-interval '3 days') returning id",
+  [tenantId,oldEvent.rows[0].id]
+ );
+ assert.ok((await expireStaleScheduledMessages())>=1);
+ const expired=await query("select status,error_code from scheduled_messages where id=$1",[oldMessage.rows[0].id]);
+ assert.equal(expired.rows[0].status,'cancelled');
+ assert.equal(expired.rows[0].error_code,'STALE_REMINDER');
  const started=Date.now();
  // Two separate pooled clients race for the same global reservation.
  const claims=await Promise.all([claimNextDueMessage(),claimNextDueMessage()]);

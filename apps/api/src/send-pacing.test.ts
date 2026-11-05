@@ -39,3 +39,11 @@ test('retry backoff respects provider cooldown and avoids immediate retries',()=
  assert.ok(retryDelayMilliseconds(1,90_000)>=90_000);
  assert.ok(retryDelayMilliseconds(4,1000)>=240_000);
 });
+
+test('stale reminders older than 24 hours must not be dispatched automatically',async()=>{
+ const {isStaleReminder,MAX_REMINDER_LATENESS_MS}=await import('./send-pacing.js');
+ const now=Date.UTC(2026,10,5,10,0,0);
+ assert.equal(isStaleReminder(new Date(now-MAX_REMINDER_LATENESS_MS-1),now),true);
+ assert.equal(isStaleReminder(new Date(now-MAX_REMINDER_LATENESS_MS),now),false);
+ assert.equal(isStaleReminder(new Date(now-60_000),now),false);
+});
