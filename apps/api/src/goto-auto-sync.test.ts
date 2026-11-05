@@ -11,13 +11,17 @@ test('no templates is a valid successful result',async()=>{
 });
 test('GoTo errors never leak sensitive response details to the user',async()=>{
  const denied=await attemptAutomaticTemplateSync(async()=>{throw Error('GoTo HTTP 403: token=secret&accountKey=confidential')});
- assert.equal(denied.status,'error');assert.match(denied.message,/403/);assert.doesNotMatch(denied.message,/secret|confidential/);
+ if(denied.status!=='error')throw new Error('Expected GoTo error');
+ assert.match(denied.message,/403/);assert.doesNotMatch(denied.message,/secret|confidential/);
  const expired=await attemptAutomaticTemplateSync(async()=>{throw Error('GoTo HTTP 401: Bearer private-token')});
+ if(expired.status!=='error')throw new Error('Expected authentication error');
  assert.match(expired.message,/Reconecte/);assert.doesNotMatch(expired.message,/private-token/);
 });
 test('rate-limited and network failures are handled without throwing',async()=>{
  const limited=await attemptAutomaticTemplateSync(async()=>{throw Error('GoTo HTTP 429')});
- assert.equal(limited.status,'error');assert.match(limited.message,/429/);
+ if(limited.status!=='error')throw new Error('Expected rate-limit error');
+ assert.match(limited.message,/429/);
  const network=await attemptAutomaticTemplateSync(async()=>{throw Error('fetch failed: internal-host')});
- assert.equal(network.status,'error');assert.doesNotMatch(network.message,/internal-host/);
+ if(network.status!=='error')throw new Error('Expected network error');
+ assert.doesNotMatch(network.message,/internal-host/);
 });
