@@ -78,3 +78,7 @@ O projeto não foi validado contra uma conta GoTo de produção; são necessári
 Após configurar a conta GoTo e o webhook de entrada, acesse **API e Integrações** no menu do Administrador. Crie uma chave com escopos mínimos e guarde o valor apresentado uma única vez. Cadastre URLs de webhook HTTPS público com porta 443 e configure assinatura HMAC no CRM receptor. Execute testes de autenticação, opt-out, idempotência de agendamento, reagendamento e entrega de webhook antes de produção.
 
 Leia o guia [API Pública](../docs/PUBLIC_API.md) para contratos e exemplos.
+
+## Templates avançados GoTo
+
+Execute a migração `database/005_goto_rich_templates.sql` após a 004. Verifique o bucket privado `brnotify-goto-media` no Supabase Storage. Para configurar texto, mídia e botões, consulte [o guia](../docs/GOTO_RICH_TEMPLATES.md).
