@@ -15,7 +15,7 @@ try{
  for(const path of [
   'database/001_init.sql','database/002_rebuild_queue.sql',
   'database/003_public_integrations.sql','database/004_unified_reports.sql','database/005_goto_rich_templates.sql',
-  'database/006_safe_message_dispatch.sql'
+  'database/006_safe_message_dispatch.sql','database/007_ivr_on_demand.sql'
  ]){
   await client.query(await fs.readFile(path,'utf8'));
   console.log('Migração SQL aprovada:',path);
