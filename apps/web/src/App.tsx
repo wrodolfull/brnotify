@@ -12,6 +12,7 @@ import {Imports} from './pages/Imports';
 import {Automations} from './pages/Automations';
 import {Messages} from './pages/Messages';
 import {SettingsPage} from './pages/Settings';
+import {TemplateLibrary} from './pages/TemplateLibrary';
 import {ApiIntegrations} from './pages/ApiIntegrations';
 import {Reports} from './pages/Reports';
 import {Tenants} from './pages/Tenants';
@@ -83,7 +84,7 @@ function Workspace({session}:{session:Session}){
    </aside>
    <div className="main-shell"><header className="topbar"><button className="mobile-menu" aria-label="Abrir menu" onClick={()=>setMenuOpen(true)}><Menu size={23}/></button><div className="topbar-breadcrumb"><span>BR Notify</span><span className="divider-dot">/</span><strong>{tenantName}</strong></div><div className="topbar-right"><span className="topbar-env">{isSuper?'Super Admin':role==='viewer'?'Visualização':'Admin'}</span><div className="topbar-avatar">{(actor?.email||'').slice(0,1).toUpperCase()}</div></div></header>
     <main className="page-content">{!tenantId&&location.pathname!=='/tenants'?<div className="empty-workspace"><Building2 size={34}/><h2>Nenhum ambiente selecionado</h2><p>Crie ou selecione um ambiente para começar.</p>{isSuper&&<Button onClick={()=>navigate('/tenants')}>Gerenciar ambientes</Button>}</div>:
-     <Routes><Route path="/" element={<Dashboard/>}/><Route path="/contacts" element={<Contacts/>}/><Route path="/events" element={<Events/>}/><Route path="/imports" element={<Imports/>}/><Route path="/automations" element={<Automations/>}/><Route path="/messages" element={<Messages/>}/><Route path="/reports" element={<Reports/>}/><Route path="/settings" element={<SettingsPage/>}/><Route path="/api-integrations" element={role==='admin'?<ApiIntegrations/>:<Navigate to="/"/>}/><Route path="/tenants" element={isSuper?<Tenants/>:<Navigate to="/"/>}/><Route path="/members" element={isSuper?<Members/>:<Navigate to="/"/>}/><Route path="*" element={<Navigate to="/"/>}/></Routes>}</main>
+     <Routes><Route path="/" element={<Dashboard/>}/><Route path="/contacts" element={<Contacts/>}/><Route path="/events" element={<Events/>}/><Route path="/imports" element={<Imports/>}/><Route path="/automations" element={<Automations/>}/><Route path="/messages" element={<Messages/>}/><Route path="/reports" element={<Reports/>}/><Route path="/settings" element={<SettingsPage/>}/><Route path="/template-library" element={<TemplateLibrary/>}/><Route path="/api-integrations" element={role==='admin'?<ApiIntegrations/>:<Navigate to="/"/>}/><Route path="/tenants" element={isSuper?<Tenants/>:<Navigate to="/"/>}/><Route path="/members" element={isSuper?<Members/>:<Navigate to="/"/>}/><Route path="*" element={<Navigate to="/"/>}/></Routes>}</main>
    </div>
    {toast&&<div role="status" className={'toast toast-'+toast.kind}>{toast.message}<button onClick={()=>setToast(null)}><X size={15}/></button></div>}
   </div>
