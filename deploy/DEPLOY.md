@@ -5,7 +5,7 @@ Node.js 22+, npm, Git, Nginx, PM2, projeto Supabase e conta GoTo com WhatsApp ha
 
 ## 1. Supabase
 - Crie projeto dedicado.
-- Execute database/001_init.sql, database/002_rebuild_queue.sql e database/003_public_integrations.sql pelo SQL Editor, nesta ordem.
+- Execute database/001_init.sql, database/002_rebuild_queue.sql e database/003_public_integrations.sql e database/004_unified_reports.sql pelo SQL Editor, nesta ordem.
 - Em Authentication, configure URL de produção, e-mail SMTP para convites e desative cadastro público.
 - Obtenha Project URL, anon key, service_role key e connection string PostgreSQL.
 - Use certificado de CA correto para conexão PostgreSQL; não desative validação TLS.

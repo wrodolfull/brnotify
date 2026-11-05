@@ -17,7 +17,7 @@ export async function callAPI(session:Session,path:string,tenantId:string,option
  }
  if(result.status===204)return null;
  const ct=result.headers.get('content-type')||'';
- if(ct.includes('spreadsheet')||ct.includes('octet-stream'))return result.blob();
+ if(ct.includes('spreadsheet')||ct.includes('octet-stream')||ct.includes('text/csv'))return result.blob();
  return result.json();
 }
 export function fmtDate(input:string|Date,withTime=false){

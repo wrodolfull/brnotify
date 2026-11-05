@@ -14,7 +14,7 @@ try{
  await client.query("do $$begin if not exists(select from pg_roles where rolname='anon') then create role anon nologin; end if; if not exists(select from pg_roles where rolname='authenticated') then create role authenticated nologin; end if; end$$");
  for(const path of [
   'database/001_init.sql','database/002_rebuild_queue.sql',
-  'database/003_public_integrations.sql'
+  'database/003_public_integrations.sql','database/004_unified_reports.sql'
  ]){
   await client.query(await fs.readFile(path,'utf8'));
   console.log('Migração SQL aprovada:',path);
