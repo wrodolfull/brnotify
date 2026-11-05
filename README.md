@@ -50,3 +50,7 @@ A tela **Relatório geral**, disponível para Administradores e Visualizadores, 
 ## Templates ricos GoTo (mídia e botões)
 
 A integração suporta templates com imagens/vídeo/PDF no cabeçalho, botões com variáveis e envios reais de teste. A mídia é privada por ambiente no Supabase Storage. Veja [GoTo — templates ricos](docs/GOTO_RICH_TEMPLATES.md).
+
+## Biblioteca de modelos de WhatsApp
+
+Na integração GoTo Connect, a **Biblioteca de modelos** oferece 12 sugestões para cadastro manual na Meta, com variáveis, mídia, botões e mapeamento guiado após sincronização. Guia: [Biblioteca de modelos](docs/TEMPLATE_LIBRARY.md).
