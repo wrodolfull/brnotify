@@ -19,7 +19,7 @@ const standard={
  definition:{components:[
   {type:'header',components:[{type:'text',attributes:{text:'Update for {{store_name}}'},parameters:[{name:'store_name'}]}]},
   {type:'body',components:[{type:'text',attributes:{text:'Hello {{customer_name}}, order {{order_id}}'},parameters:[{name:'customer_name'},{name:'order_id'}]}]},
-  {type:'footer',components:[{type:'text',attributes:{text:'Reply STOP'}]}]},
+  {type:'footer',components:[{type:'text',attributes:{text:'Reply STOP'}}]},
   {type:'buttons',components:[
    {type:'button',attributes:{buttonType:'URL',text:'Track Order'},parameters:[{name:'tracking_code'}]},
    {type:'button',attributes:{buttonType:'QUICK_REPLY',text:'Contact Support'}}
