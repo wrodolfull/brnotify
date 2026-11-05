@@ -1,4 +1,5 @@
 import {useEffect,useState,type FormEvent} from 'react';
+import {Link} from 'react-router-dom';
 import {
  Activity,AlertCircle,ArrowUpRight,BookOpen,Check,Clipboard,Code2,
  KeyRound,Link2,Plus,RefreshCw,RotateCcw,ShieldCheck,Trash2,
@@ -8,7 +9,7 @@ import {useApp} from '../context';
 import {
  Button,Card,Empty,ErrorHint,Modal,PageTitle,Pagination,Status,formValues,useList
 } from '../components';
-import {API_URL,fmtDate} from '../api';
+import {fmtDate} from '../api';
 
 type Tab='keys'|'webhooks'|'deliveries'|'logs'|'inbound';
 const SCOPES=[
@@ -72,7 +73,7 @@ export function ApiIntegrations(){
  const logs=useList('/api/integrations/logs',tab==='logs');
  const inbound=useList('/api/integrations/inbound',tab==='inbound');
  const loadingError=tab==='keys'?keys.error:tab==='webhooks'?hooks.error:tab==='deliveries'?deliveries.error:tab==='logs'?logs.error:inbound.error;
- const docsLink=API_URL+'/v1/openapi.json';
+ const docsLink='/docs';
  const toggle=(value:string,selected:string[],setter:(values:string[])=>void)=>{
   setter(selected.includes(value)?selected.filter(v=>v!==value):[...selected,value]);
  };
@@ -106,7 +107,7 @@ export function ApiIntegrations(){
  return <>
   <PageTitle eyebrow="PLATAFORMA / INTEGRAÇÕES" title="API e Integrações"
    subtitle="Conecte ERPs e CRMs, acompanhe chamadas e sincronize seus agendamentos."
-   action={<a href={docsLink} target="_blank" rel="noopener noreferrer" className="nd-primary-button"><BookOpen size={17}/> Documentação <ArrowUpRight size={15}/></a>}/>
+   action={<Link to={docsLink} target="_blank" rel="noopener noreferrer" className="nd-primary-button"><BookOpen size={17}/> Documentação <ArrowUpRight size={15}/></Link>}/>
   <div className="integration-explainer">
    <span className="integration-explainer-icon"><Link2 size={20}/></span>
    <div><strong>Sua operação, conectada.</strong><span>Chaves limitadas ao ambiente atual. Dados externos chegam pela API; eventos e status são devolvidos por webhooks assinados.</span></div>
