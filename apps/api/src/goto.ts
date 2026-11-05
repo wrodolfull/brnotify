@@ -81,6 +81,7 @@ export async function syncTemplates(tenantId:string){
 }
 export {buildTemplatePayload,resolveTemplateMediaId,templateFields} from './goto-template.js';
 import type {MediaAttachment} from './goto-media.js';
+import {retryAfterMilliseconds} from './send-pacing.js';
 export function buildMessagingForm(payload:unknown,attachments:MediaAttachment[]=[]){
  const form=new FormData();
  form.append('request',new Blob([JSON.stringify(payload)],{type:'application/json'}),'request.json');
@@ -89,7 +90,7 @@ export function buildMessagingForm(payload:unknown,attachments:MediaAttachment[]
  }
  return form;
 }
-export class ProviderError extends Error {constructor(public status:number,detail:string){super(detail)}}
+export class ProviderError extends Error {constructor(public status:number,detail:string,public retryAfterMs:number|null=null){super(detail)}}
 export async function sendTemplate(tenantId:string,payload:unknown,attachments:MediaAttachment[]=[]){
  const {token,accountKey}=await getAccessToken(tenantId);
  if(!accountKey)throw new Error('Conta GoTo não configurada');
@@ -100,8 +101,10 @@ export async function sendTemplate(tenantId:string,payload:unknown,attachments:M
    method:'POST',headers:{authorization:'Bearer '+token},body:form,signal:AbortSignal.timeout(20000)
   });
  }catch(e){throw new ProviderError(0,'Resultado indeterminado: conexão ou timeout com GoTo')}
- if(!response.ok)throw new ProviderError(response.status,'GoTo HTTP '+response.status+': '+(await response.text()).slice(0,350));
- const value=await response.json() as {id?:string};
+ if(!response.ok)throw new ProviderError(response.status,'GoTo HTTP '+response.status+': '+(await response.text()).slice(0,350),retryAfterMilliseconds(response.headers.get('retry-after')));
+ let value:{id?:string};
+ try{value=await response.json() as {id?:string}}
+ catch{throw new ProviderError(0,'Resposta não JSON após envio. Conciliar antes de tentar novamente')}
  if(!value.id)throw new ProviderError(0,'Resposta da GoTo sem ID. Verificar antes de reenviar');
  return value.id;
 }

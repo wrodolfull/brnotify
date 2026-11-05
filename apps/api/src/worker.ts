@@ -1,5 +1,6 @@
 import {pool,query} from './db.js';
 import {processMessages} from './scheduler.js';
+import {expireStaleScheduledMessages} from './send-pacing.js';
 import {rebuildEvent} from './time.js';
 import {processOutboundWebhooks,reclaimOutboundAfterCrash} from './outbound-webhooks.js';
 
@@ -17,18 +18,31 @@ async function rebuildRules(){
  if(ids.rows.length<100)await query('delete from rule_rebuild_queue where tenant_id=$1',[tenant_id]);
  else await query('update rule_rebuild_queue set last_event_id=$2,updated_at=now() where tenant_id=$1',[tenant_id,ids.rows[ids.rows.length-1].id]);
 }
-async function tick(){
- // Nunca reenvia automaticamente jobs que ficaram em processamento após crash:
- // provedor pode ter aceito a solicitação; revisão manual evita mensagens duplicadas.
- await query("update scheduled_messages set status='unknown',error_description='Resultado indeterminado após interrupção do worker',locked_at=null,updated_at=now() where status='processing' and locked_at<now()-interval '3 minutes'");
- await rebuildRules();
- await processMessages();
- await reclaimOutboundAfterCrash();
- await processOutboundWebhooks();
+async function maintenanceLoop(){
+ while(running){
+  try{
+   // Resultado indeterminado NÃO autoriza reenvio após crash.
+   await query("update scheduled_messages set status='unknown',error_code='WORKER_INTERRUPTED',error_description='Resultado indeterminado após interrupção do worker',locked_at=null,updated_at=now() where status='processing' and locked_at<now()-interval '3 minutes'");
+   await expireStaleScheduledMessages();
+   await rebuildRules();
+   await reclaimOutboundAfterCrash();
+   await processOutboundWebhooks();
+  }catch(e){
+   console.error('[worker-maintenance]',e instanceof Error?e.message:'erro');
+  }
+  if(running)await sleep(10000);
+ }
+}
+async function dispatchLoop(){
+ while(running){
+  try{await processMessages()}
+  catch(e){console.error('[worker-dispatch]',e instanceof Error?e.message:'erro')}
+  if(running)await sleep(800);
+ }
 }
 async function main(){
- console.log('BR Notify worker iniciado');
- while(running){try{await tick()}catch(e){console.error('[worker]',e instanceof Error?e.message:'erro')}await sleep(10000)}
+ console.log('BR Notify worker iniciado: disparos cadenciados e webhooks independentes');
+ await Promise.all([maintenanceLoop(),dispatchLoop()]);
  await pool.end();
 }
 process.on('SIGTERM',()=>{running=false});

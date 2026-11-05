@@ -3,11 +3,12 @@ import {Router} from 'express';
 import {z} from 'zod';
 import {query,audit} from './db.js';
 import {authenticate,tenant,activeTenant,wrap} from './auth.js';
-import {buildTemplatePayload,resolveTemplateMediaId,sendTemplate} from './goto.js';
+import {buildTemplatePayload,resolveTemplateMediaId,sendTemplate,ProviderError} from './goto.js';
 import {templateFields} from './goto-template.js';
 import {downloadTenantMedia} from './goto-media.js';
 import {phoneE164} from './time.js';
-import {withTransaction,ApiOperationError} from './external-operations.js';
+import {ApiOperationError} from './external-operations.js';
+import {reserveDirectSend,deferAfterRateLimit,retryDelayMilliseconds} from './send-pacing.js';
 import {env} from './config.js';
 
 export const gotoTestRouter=Router();
@@ -49,7 +50,7 @@ gotoTestRouter.post('/:id/test',wrap(async(req,res)=>{
  const request=buildTemplatePayload(customized,contact,event,record,(await query('select from_touchpoint from goto_connections where tenant_id=$1',[req.tenantId])).rows[0]?.from_touchpoint,file?.filename);
  if(!request.from)throw new ApiOperationError(409,'Configure o remetente WhatsApp deste ambiente');
  const hash=crypto.createHmac('sha256',env.TOKEN_ENCRYPTION_KEY).update(phone).digest('hex');
- const logId=await withTransaction(async run=>{
+ const logId=await reserveDirectSend(req.tenantId!,async run=>{
   await run('select pg_advisory_xact_lock(hashtext($1),7821)',[req.tenantId]);
   const count=await run("select count(*)::int total from goto_test_sends where tenant_id=$1 and created_at>now()-interval '1 hour'",[req.tenantId]);
   if(count.rows[0].total>=5)throw new ApiOperationError(429,'Limite de cinco testes por hora neste ambiente');
@@ -59,7 +60,14 @@ gotoTestRouter.post('/:id/test',wrap(async(req,res)=>{
   );
   return created.rows[0].id as string;
  });
- const providerId=await sendTemplate(req.tenantId!,request,file?[file]:[]);
+ let providerId:string;
+ try{providerId=await sendTemplate(req.tenantId!,request,file?[file]:[])}
+ catch(e){
+  if(e instanceof ProviderError&&e.status===429){
+   await deferAfterRateLimit(req.tenantId!,retryDelayMilliseconds(1,e.retryAfterMs));
+  }
+  throw e;
+ }
  await query('update goto_test_sends set provider_message_id=$2 where id=$1',[logId,providerId]);
  await audit(req.tenantId!,req.actor!.id,'goto.template_test_sent',{templateId,requestId:logId});
  res.status(201).json({accepted:true,message_id:providerId,notice:'Mensagem aceita pela GoTo; confirme a entrega pelo WhatsApp ou canal de notificações'});
