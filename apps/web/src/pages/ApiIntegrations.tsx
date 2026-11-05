@@ -17,7 +17,8 @@ const SCOPES=[
  ['events:read','Consultar agendamentos'],
  ['events:write','Criar, reagendar e cancelar eventos'],
  ['imports:write','Importar lotes de até 50 eventos'],
- ['messages:read','Consultar status dos disparos']
+ ['messages:read','Consultar status dos disparos'],
+ ['messages:send','Enviar templates por HTTP (URA/CRM)']
 ] as const;
 const EVENTS=[
  'reminder.sent','reminder.delivered','reminder.failed',

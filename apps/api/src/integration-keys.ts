@@ -7,7 +7,7 @@ import {wrap} from './auth.js';
 
 export const API_SCOPES=[
  'contacts:read','contacts:write','events:read','events:write',
- 'imports:write','messages:read'
+ 'imports:write','messages:read','messages:send'
 ] as const;
 export type ApiScope=typeof API_SCOPES[number];
 
