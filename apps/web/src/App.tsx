@@ -1,8 +1,9 @@
-import {useCallback,useEffect,useMemo,useState,type FormEvent} from 'react';
+import {useCallback,useEffect,useMemo,useRef,useState,type FormEvent,type RefObject} from 'react';
 import type {Session} from '@supabase/supabase-js';
 import {NavLink,Navigate,Route,Routes,useLocation,useNavigate} from 'react-router-dom';
 import {Bell,Building2,CalendarDays,ChevronDown,Clock3,LayoutDashboard,LogOut,Menu,Send,Settings,Shield,Upload,Users,X,LockKeyhole,PlugZap,ChartNoAxesCombined} from 'lucide-react';
 import {supabase,callAPI,type Actor} from './api';
+import {preserveAuthenticatedView,requireActiveSession} from './auth-session';
 import {AppContext} from './context';
 import {Button,Card,ErrorHint,Input,Loader} from './components';
 import {Dashboard} from './pages/Dashboard';
@@ -28,25 +29,40 @@ function AuthScreen(){
  return <div className="auth-page"><div className="auth-brand"><span className="brand-square"><Bell size={23} fill="currentColor"/></span><span>BR<span className="brand-blue">Notify</span></span></div><Card className="auth-card"><div className="auth-kicker"><LockKeyhole size={16}/> Acesso restrito</div><h1>{reset?'Recuperar acesso':'Bem-vindo de volta'}</h1><p>Gerencie lembretes e notificações em um só lugar. O acesso é concedido pelo administrador da plataforma.</p><form onSubmit={submit} className="form-stack"><label className="field"><span>E-mail</span><input type="email" value={email} onChange={e=>setEmail(e.target.value)} autoComplete="email" required placeholder="seu@email.com"/></label>{!reset&&<label className="field"><span>Senha</span><input type="password" value={password} onChange={e=>setPassword(e.target.value)} autoComplete="current-password" required placeholder="••••••••"/></label>}<ErrorHint error={error}/><Button type="submit" disabled={busy}>{busy?'Verificando...':reset?'Enviar recuperação':'Entrar na plataforma'}</Button></form><button className="text-link" onClick={()=>{setReset(!reset);setError('')}}>{reset?'Voltar ao login':'Esqueci minha senha'}</button></Card><small>BR Notify · Ambiente seguro</small></div>;
 }
 function MenuItem({to,icon:Icon,label,onClose}:{to:string;icon:any;label:string;onClose:()=>void}){return <NavLink to={to} end={to==='/'} onClick={onClose} className={({isActive})=>'nav-item '+(isActive?'nav-active':'')}><Icon size={19} strokeWidth={1.8}/><span>{label}</span></NavLink>}
-function Workspace({session}:{session:Session}){
+function Workspace({sessionRef}:{sessionRef:RefObject<Session|null>}){
  const [actor,setActor]=useState<Actor|null>(null),[tenants,setTenants]=useState<any[]>([]),[tenantId,setTenantId]=useState(localStorage.getItem('brnotify.tenant')||''),[busy,setBusy]=useState(true),[fatal,setFatal]=useState(''),[menuOpen,setMenuOpen]=useState(false);
+ const tenantIdRef=useRef(tenantId);
  const [toast,setToast]=useState<{message:string;kind:'success'|'error'}|null>(null);
  const location=useLocation(),navigate=useNavigate();
- const api=useCallback((path:string,options:RequestInit={},forceTenant?:string)=>callAPI(session,path,forceTenant??tenantId,options),[session,tenantId]);
+ // Use the newest token from the ref without changing the API function identity
+ // when Supabase emits SIGNED_IN on focus or TOKEN_REFRESHED.
+ const api=useCallback((path:string,options:RequestInit={},forceTenant?:string)=>
+  callAPI(requireActiveSession(sessionRef),path,forceTenant??tenantId,options),
+  [sessionRef,tenantId]
+ );
  const refresh=useCallback(async()=>{
-  const me=await callAPI(session,'/api/me','');
-  const list=await callAPI(session,'/api/tenant-options','');
+  const current=requireActiveSession(sessionRef);
+  const [me,list]=await Promise.all([
+   callAPI(current,'/api/me',''),
+   callAPI(current,'/api/tenant-options','')
+  ]);
   const items=[...(list.items||[])];
-  const saved=tenantId||localStorage.getItem('brnotify.tenant')||'';
-  if(saved&&!items.some((x:any)=>(x.id||x.tenant_id)===saved)){
-   try{const extra=await callAPI(session,'/api/tenants/'+encodeURIComponent(saved),'');items.push({...extra,role:me.memberships.find((m:any)=>m.tenant_id===saved)?.role})}catch{}
-  }
+  const saved=tenantIdRef.current||localStorage.getItem('brnotify.tenant')||'';
+  const authorized=items.some((x:any)=>(x.id||x.tenant_id)===saved);
+  // A different signed-in user cannot inherit the previous user's workspace.
+  const nextId=authorized?saved:(items[0]?.id||items[0]?.tenant_id||'');
   setActor(me);setTenants(items);
-  if(!items.some((x:any)=>(x.id||x.tenant_id)===saved)&&items.length){
-   const id=items[0].id||items[0].tenant_id;setTenantId(id);localStorage.setItem('brnotify.tenant',id)
-  }else if(saved){setTenantId(saved)}
- },[session,tenantId]);
- useEffect(()=>{let alive=true;setBusy(true);refresh().then(()=>{if(alive)setFatal('')}).catch(e=>{if(alive)setFatal(e.message)}).finally(()=>{if(alive)setBusy(false)});return()=>{alive=false}},[session]);
+  tenantIdRef.current=nextId;
+  setTenantId(old=>old===nextId?old:nextId);
+  if(nextId)localStorage.setItem('brnotify.tenant',nextId);
+  else localStorage.removeItem('brnotify.tenant');
+ },[sessionRef]);
+ useEffect(()=>{
+  let alive=true;
+  setBusy(true);
+  refresh().then(()=>{if(alive)setFatal('')}).catch(e=>{if(alive)setFatal(e.message)}).finally(()=>{if(alive)setBusy(false)});
+  return()=>{alive=false};
+ },[refresh]);
  useEffect(()=>{setMenuOpen(false)},[location.pathname]);
  useEffect(()=>{if(!toast)return;const t=setTimeout(()=>setToast(null),4500);return()=>clearTimeout(t)},[toast]);
  const notify=useCallback((message:string,kind:'success'|'error'='success')=>setToast({message,kind}),[]);
@@ -55,7 +71,7 @@ function Workspace({session}:{session:Session}){
  const segment=selected?.segment||actor?.memberships.find(m=>m.tenant_id===tenantId)?.segment||'custom';
  const isSuper=!!actor?.superAdmin;
  const role=isSuper?'admin':(selected?.role||actor?.memberships.find(m=>m.tenant_id===tenantId)?.role||'viewer');
- const changeTenant=useCallback((id:string)=>{setTenantId(id);localStorage.setItem('brnotify.tenant',id);navigate('/');setMenuOpen(false)},[navigate]);
+ const changeTenant=useCallback((id:string)=>{tenantIdRef.current=id;setTenantId(id);localStorage.setItem('brnotify.tenant',id);navigate('/');setMenuOpen(false)},[navigate]);
  const ctx=useMemo(()=>actor?{actor,tenantId,tenantName,segment,role:role as 'admin'|'viewer',isSuper,api,selectTenant:changeTenant,notify,refresh}:null,[actor,tenantId,tenantName,segment,role,isSuper,api,changeTenant,notify,refresh]);
  if(busy)return <Loader/>;
  if(fatal)return <div className="error-full"><h2>Acesso indisponível</h2><p>{fatal}</p><Button onClick={()=>supabase.auth.signOut()}>Sair</Button></div>;
@@ -92,8 +108,22 @@ function Workspace({session}:{session:Session}){
 }
 export function App(){
  const [session,setSession]=useState<Session|null>(null),[loading,setLoading]=useState(true),[recovery,setRecovery]=useState(false),[newPassword,setNewPassword]=useState(''),[error,setError]=useState('');
- useEffect(()=>{supabase.auth.getSession().then(({data})=>{setSession(data.session);setLoading(false)});const {data}=supabase.auth.onAuthStateChange((event,s)=>{setSession(s);if(event==='PASSWORD_RECOVERY')setRecovery(true)});return()=>data.subscription.unsubscribe()},[]);
+ const sessionRef=useRef<Session|null>(null);
+ useEffect(()=>{
+  let alive=true;
+  // INITIAL_SESSION resolves startup; focus and JWT refresh must not remount
+  // Workspace or refetch all tabs. Only a change of user identity does that.
+  const {data:{subscription}}=supabase.auth.onAuthStateChange((event,next)=>{
+   if(!alive)return;
+   sessionRef.current=next;
+   setSession(current=>preserveAuthenticatedView(current,next));
+   setLoading(false);
+   if(event==='PASSWORD_RECOVERY')setRecovery(true);
+   if(event==='SIGNED_OUT')setRecovery(false);
+  });
+  return()=>{alive=false;subscription.unsubscribe()};
+ },[]);
  if(loading)return <Loader/>;
  if(recovery&&session)return <div className="auth-page"><Card className="auth-card"><h1>Definir nova senha</h1><form className="form-stack" onSubmit={async e=>{e.preventDefault();const {error}=await supabase.auth.updateUser({password:newPassword});if(error)setError(error.message);else setRecovery(false)}}><label className="field"><span>Nova senha</span><input type="password" value={newPassword} minLength={12} onChange={e=>setNewPassword(e.target.value)} required/></label><ErrorHint error={error}/><Button type="submit">Atualizar senha</Button></form></Card></div>;
- return session?<Workspace session={session}/>:<AuthScreen/>;
+ return session?<Workspace key={session.user.id} sessionRef={sessionRef}/>:<AuthScreen/>;
 }
