@@ -83,9 +83,10 @@ Teste com uma conta GoTo real, um número autorizado e modelos aprovados. O acom
 
 1. Execute `database/001_init.sql`, `002_rebuild_queue.sql`, `003_public_integrations.sql`, `004_unified_reports.sql` e depois **`005_goto_rich_templates.sql`**, nessa ordem.
 2. Confira se o bucket `brnotify-goto-media` foi criado como privado no Supabase Storage.
-3. Publique backend, frontend e worker com o mesmo `TOKEN_ENCRYPTION_KEY` usado nas credenciais GoTo.
-4. Conecte GoTo, sincronize os templates e faça testes dos três formatos de mídia e botões.
-5. Não coloque `SUPABASE_SERVICE_ROLE_KEY` no frontend nem compartilhe dados de acesso em exemplos de código.
+3. Configure o Nginx para aceitar ao menos 18 MB no caminho da API (`client_max_body_size 18m`), em razão do upload multipart de arquivos de até 16 MiB.
+4. Publique backend, frontend e worker com o mesmo `TOKEN_ENCRYPTION_KEY` usado nas credenciais GoTo.
+5. Conecte GoTo, sincronize os templates e faça testes dos três formatos de mídia e botões.
+6. Não coloque `SUPABASE_SERVICE_ROLE_KEY` no frontend nem compartilhe dados de acesso em exemplos de código.
 
 ## Limitações conscientes
 
