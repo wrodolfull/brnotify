@@ -1,5 +1,6 @@
 import {pool,query} from './db.js';
 import {processMessages} from './scheduler.js';
+import {expireStaleScheduledMessages} from './send-pacing.js';
 import {rebuildEvent} from './time.js';
 import {processOutboundWebhooks,reclaimOutboundAfterCrash} from './outbound-webhooks.js';
 
@@ -22,6 +23,7 @@ async function maintenanceLoop(){
   try{
    // Resultado indeterminado NÃO autoriza reenvio após crash.
    await query("update scheduled_messages set status='unknown',error_code='WORKER_INTERRUPTED',error_description='Resultado indeterminado após interrupção do worker',locked_at=null,updated_at=now() where status='processing' and locked_at<now()-interval '3 minutes'");
+   await expireStaleScheduledMessages();
    await rebuildRules();
    await reclaimOutboundAfterCrash();
    await processOutboundWebhooks();

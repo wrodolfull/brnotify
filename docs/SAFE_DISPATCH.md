@@ -58,3 +58,7 @@ O worker mantém **dois loops independentes** no mesmo processo: um consulta a f
 ## Segurança adicional do webhook de entrada GoTo
 
 O callback atual recebe um segredo no caminho `/api/webhooks/goto/:secret`. Por esse motivo, o exemplo Nginx agora desativa o access log especificamente para essa rota, evitando gravar o segredo como parte da URL. Se usar Cloudflare, outro proxy ou ferramenta APM, desabilite logs da URL completa também nesse caminho, use HTTPS e rotacione o segredo se ele tiver sido exposto. A mudança do exemplo Nginx não altera configurações já em produção; aplique-a manualmente na VPS.
+
+## Controle de lembretes atrasados
+
+Uma interrupção longa do worker poderia acumular vários lembretes antigos e dispará-los em sequência quando o serviço voltasse. A nova manutenção cancela, em lotes de até 500 por execução, lembretes com `scheduled_at` anterior a **24 horas atrás**. O dispatcher também verifica a tolerância imediatamente antes do envio. A mensagem não é enviada, permanece no relatório com `error_code=STALE_REMINDER` e não pode ser reenviada pela ação manual de falhas. É uma opção conservadora para evitar notificações antigas e inesperadas; não substitui monitoramento de filas nem políticas de consentimento.

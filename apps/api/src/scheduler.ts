@@ -1,5 +1,5 @@
 import {DateTime} from 'luxon';
-import {claimNextDueMessage,classifyProviderFailure,retryDelayMilliseconds,deferAfterRateLimit,withDispatchTransaction} from './send-pacing.js';
+import {claimNextDueMessage,classifyProviderFailure,retryDelayMilliseconds,deferAfterRateLimit,withDispatchTransaction,isStaleReminder,StaleReminderError} from './send-pacing.js';
 import {query} from './db.js';
 import {buildTemplatePayload,resolveTemplateMediaId,ProviderError,sendTemplate} from './goto.js';
 import {downloadTenantMedia} from './goto-media.js';
@@ -19,6 +19,7 @@ export async function processMessages(){
   );
   const v=data.rows[0];
   if(!v)throw new Error('Evento inexistente');
+  if(isStaleReminder(v.scheduled_at))throw new StaleReminderError();
   if(v.event_status!=='scheduled'||v.event_revision!==msg.schedule_revision||
     ['reschedule_requested','declined'].includes(v.confirmation_status)||
     !v.consent||v.opted_out_at)
@@ -44,8 +45,8 @@ export async function processMessages(){
   });
  }catch(err){
   const p=err instanceof ProviderError?err:null;
-  const retryType=providerId?'unknown':p?classifyProviderFailure(p.status,msg.attempt_count):'failed';
-  const code=providerId?'PERSISTENCE':p?String(p.status||'UNKNOWN'):'VALIDATION';
+  const retryType=providerId?'unknown':err instanceof StaleReminderError?'cancelled':p?classifyProviderFailure(p.status,msg.attempt_count):'failed';
+  const code=providerId?'PERSISTENCE':err instanceof StaleReminderError?'STALE_REMINDER':p?String(p.status||'UNKNOWN'):'VALIDATION';
   const detail=providerId?'A GoTo aceitou o envio mas a persistência falhou: conciliar manualmente':
    (err instanceof Error?err.message:'Falha desconhecida');
   const retryDelay=p?.status===429?retryDelayMilliseconds(msg.attempt_count,p.retryAfterMs):0;

@@ -2,6 +2,19 @@ import crypto from 'node:crypto';
 import type {SqlRunner} from './time.js';
 import {pool} from './db.js';
 
+export const MAX_REMINDER_LATENESS_MS=24*60*60*1000;
+export function isStaleReminder(scheduledAt:Date|string,now=Date.now()){
+ return now-new Date(scheduledAt).getTime()>MAX_REMINDER_LATENESS_MS;
+}
+export class StaleReminderError extends Error{
+ constructor(){super('Lembrete vencido há mais de 24 horas; não enviar aviso antigo')}
+}
+export async function expireStaleScheduledMessages(){
+ const rows=await pool.query(
+  "with expired as (select id from scheduled_messages where status='scheduled' and scheduled_at<now()-interval '24 hours' order by scheduled_at for update skip locked limit 500) update scheduled_messages m set status='cancelled',error_code='STALE_REMINDER',error_description='Lembrete vencido há mais de 24 horas; sem disparo automático',updated_at=now() from expired where m.id=expired.id returning m.id"
+ );
+ return rows.rowCount||0;
+}
 export const MIN_TENANT_DELAY_MS=1000;
 export const MAX_TENANT_DELAY_MS=5000;
 export const GLOBAL_MIN_DELAY_MS=1000;
