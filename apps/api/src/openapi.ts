@@ -168,6 +168,154 @@ export const openApiDefinition = {
             "type": "string"
           }
         }
+      },
+      "AppointmentSync": {
+        "type": "object",
+        "properties": {
+          "external_id": {
+            "type": "string",
+            "example": "REV-2026-1045"
+          },
+          "contact": {
+            "type": "object",
+            "required": [
+              "name",
+              "phone",
+              "consent",
+              "consent_source"
+            ],
+            "properties": {
+              "external_id": {
+                "type": "string",
+                "example": "client-102"
+              },
+              "name": {
+                "type": "string",
+                "example": "Carlos Silva"
+              },
+              "phone": {
+                "type": "string",
+                "example": "+5519999999999"
+              },
+              "consent": {
+                "type": "boolean",
+                "example": true,
+                "description": "Valor true; autorização válida do cliente para receber mensagens.",
+                "const": true
+              },
+              "consent_source": {
+                "type": "string",
+                "example": "Agendamento no CRM",
+                "description": "Origem verificável do consentimento no CRM ou sistema da clínica."
+              },
+              "email": {
+                "type": "string"
+              }
+            }
+          },
+          "record": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "example": "vehicle"
+              },
+              "external_id": {
+                "type": "string",
+                "example": "vehicle-ABC1D23"
+              },
+              "label": {
+                "type": "string",
+                "example": "Corolla"
+              },
+              "model": {
+                "type": "string",
+                "example": "Corolla"
+              },
+              "plate": {
+                "type": "string",
+                "example": "ABC1D23"
+              },
+              "details": {
+                "type": "object"
+              }
+            }
+          },
+          "event": {
+            "type": "object",
+            "required": [
+              "title",
+              "date",
+              "time"
+            ],
+            "properties": {
+              "title": {
+                "type": "string",
+                "example": "Revisão"
+              },
+              "type": {
+                "type": "string",
+                "example": "revisao"
+              },
+              "date": {
+                "type": "string",
+                "format": "date",
+                "example": "2026-12-15"
+              },
+              "time": {
+                "type": "string",
+                "example": "09:00"
+              },
+              "confirmation_enabled": {
+                "type": "boolean",
+                "description": "Permite associar respostas SIM, REAGENDAR e CANCELAR AGENDAMENTO de forma conservadora"
+              },
+              "details": {
+                "type": "object"
+              }
+            }
+          },
+          "reminders": {
+            "type": "array",
+            "minItems": 0,
+            "maxItems": 3,
+            "items": {
+              "type": "object",
+              "required": [
+                "before",
+                "unit"
+              ],
+              "properties": {
+                "before": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 365
+                },
+                "unit": {
+                  "type": "string",
+                  "enum": [
+                    "days",
+                    "weeks",
+                    "months"
+                  ]
+                },
+                "enabled": {
+                  "type": "boolean"
+                },
+                "send_time": {
+                  "type": "string",
+                  "example": "09:00"
+                }
+              }
+            }
+          }
+        },
+        "required": [
+          "external_id",
+          "contact",
+          "event"
+        ],
+        "description": "Sincronização obrigatória de compromisso: data, horário, consentimento e fila WhatsApp válida."
       }
     }
   },
@@ -887,6 +1035,45 @@ export const openApiDefinition = {
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/appointments/sync": {
+      "post": {
+        "tags": [
+          "Agendamentos"
+        ],
+        "summary": "Sincroniza contato e compromisso com garantia de lembrete WhatsApp",
+        "description": "Escopos events:write e contacts:write. Data, hora e consentimento obrigatórios. Grava contato, registro e evento e exige ao menos um lembrete futuro com template aprovado e GoTo configurada. Se não houver fila válida, retorna 409 e desfaz a transação. external_id atualiza o mesmo compromisso sem duplicar.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AppointmentSync"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Agendamento já existente sincronizado; includes starts_at, reminders_scheduled, reminders e dispatch_ready"
+          },
+          "201": {
+            "description": "Agendamento criado e lembretes programados; inclui horário real UTC"
+          },
+          "401": {
+            "description": "Token inválido ou revogado"
+          },
+          "403": {
+            "description": "Faltam escopos contacts:write e events:write"
+          },
+          "409": {
+            "description": "Sem lembrete futuro, template aprovado ou GoTo conectada. Nenhum dado é gravado."
+          },
+          "422": {
+            "description": "Data, horário, consentimento ou formato inválido"
           }
         }
       }
