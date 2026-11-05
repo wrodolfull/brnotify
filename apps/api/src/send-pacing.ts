@@ -54,7 +54,7 @@ export async function claimNextDueMessage(){
   const globally=await run("select next_allowed_at from goto_send_pacing where scope='global' for update");
   if(new Date(globally.rows[0].next_allowed_at).getTime()>Date.now())return null;
   const due=await run(
-   \`select m.id,m.tenant_id
+   `select m.id,m.tenant_id
     from scheduled_messages m
     join tenants t on t.id=m.tenant_id and t.status='active'
     left join goto_send_pacing pace on pace.scope=('tenant:'||m.tenant_id::text)
@@ -66,7 +66,7 @@ export async function claimNextDueMessage(){
        where inflight.tenant_id=m.tenant_id and inflight.status='processing'
       )
     order by m.scheduled_at,m.id
-    for update of m skip locked limit 1\`
+    for update of m skip locked limit 1`
   );
   if(!due.rowCount)return null;
   const msg=due.rows[0];
