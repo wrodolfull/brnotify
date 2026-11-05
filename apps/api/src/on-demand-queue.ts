@@ -73,10 +73,10 @@ export async function enqueueOnDemandMessage(tenantId:string,apiKeyId:string,bod
   return {id:row.rows[0].id,status:row.rows[0].status,deduplicated:false};
  });
 }
-export async function getOnDemandMessage(tenantId:string,apiKeyId:string,messageId:string){
+export async function getOnDemandMessage(tenantId:string,messageId:string){
  const found=await query(
-  "select id,status,created_at,sent_at,error_code from on_demand_messages where id=$1 and tenant_id=$2 and api_key_id=$3",
-  [messageId,tenantId,apiKeyId]
+  "select id,status,created_at,sent_at,error_code from on_demand_messages where id=$1 and tenant_id=$2",
+  [messageId,tenantId]
  );
  return found.rows[0]||null;
 }

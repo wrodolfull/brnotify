@@ -39,9 +39,9 @@ try{
  const contact=await query('select consent,consent_source from contacts where tenant_id=$1 and phone=$2',[tenant,'+5519988887777']);
  assert.equal(contact.rows[0].consent,true);
  assert.equal(contact.rows[0].consent_source,'ivr_option_whatsapp');
- const allowed=await getOnDemandMessage(tenant,key.rows[0].id,a.id);
+ const allowed=await getOnDemandMessage(tenant,a.id);
  assert.equal(allowed.id,a.id);
- assert.equal(await getOnDemandMessage(tenant,crypto.randomUUID(),a.id),null);
+ assert.equal(await getOnDemandMessage(crypto.randomUUID(),a.id),null);
  const claims=await Promise.all([claimNextOnDemandMessage(),claimNextOnDemandMessage()]);
  assert.equal(claims.filter(Boolean).length,1,'Concorrência em duas instâncias duplicou uma reserva');
  assert.equal(claims.find(Boolean)?.id,a.id);

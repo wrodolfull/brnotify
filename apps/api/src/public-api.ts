@@ -105,7 +105,7 @@ publicApiRouter.post('/messages/send',requireScope('messages:send'),wrap(async(r
 publicApiRouter.get('/messages/send/:id',requireScope('messages:send'),wrap(async(req,res)=>{
  const id=uuid.parse(req.params.id);
  const key=req.integrationKey!;
- const result=await getOnDemandMessage(key.tenantId,key.id,id);
+ const result=await getOnDemandMessage(key.tenantId,id);
  if(!result)return res.status(404).json({error:'Disparo não encontrado para esta chave'});
  res.json(result);
 }));
