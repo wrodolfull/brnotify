@@ -17,27 +17,30 @@ async function rebuildRules(){
  if(ids.rows.length<100)await query('delete from rule_rebuild_queue where tenant_id=$1',[tenant_id]);
  else await query('update rule_rebuild_queue set last_event_id=$2,updated_at=now() where tenant_id=$1',[tenant_id,ids.rows[ids.rows.length-1].id]);
 }
-let lastMaintenanceAt=0;
-async function tick(){
- const now=Date.now();
- // Manutenção/integração no mesmo ritmo anterior; loop rápido somente
- // para mensagens disponíveis depois do intervalo da GoTo.
- if(now-lastMaintenanceAt>=10000){
-  lastMaintenanceAt=now;
-  // Nunca reprocessa automaticamente um envio aceito/indeterminado após crash.
-  await query("update scheduled_messages set status='unknown',error_code='WORKER_INTERRUPTED',error_description='Resultado indeterminado após interrupção do worker',locked_at=null,updated_at=now() where status='processing' and locked_at<now()-interval '3 minutes'");
-  await rebuildRules();
-  await reclaimOutboundAfterCrash();
-  await processOutboundWebhooks();
+async function maintenanceLoop(){
+ while(running){
+  try{
+   // Resultado indeterminado NÃO autoriza reenvio após crash.
+   await query("update scheduled_messages set status='unknown',error_code='WORKER_INTERRUPTED',error_description='Resultado indeterminado após interrupção do worker',locked_at=null,updated_at=now() where status='processing' and locked_at<now()-interval '3 minutes'");
+   await rebuildRules();
+   await reclaimOutboundAfterCrash();
+   await processOutboundWebhooks();
+  }catch(e){
+   console.error('[worker-maintenance]',e instanceof Error?e.message:'erro');
+  }
+  if(running)await sleep(10000);
  }
- await processMessages();
+}
+async function dispatchLoop(){
+ while(running){
+  try{await processMessages()}
+  catch(e){console.error('[worker-dispatch]',e instanceof Error?e.message:'erro')}
+  if(running)await sleep(800);
+ }
 }
 async function main(){
- console.log('BR Notify worker iniciado com cadência distribuída');
- while(running){
-  try{await tick()}catch(e){console.error('[worker]',e instanceof Error?e.message:'erro')}
-  await sleep(800);
- }
+ console.log('BR Notify worker iniciado: disparos cadenciados e webhooks independentes');
+ await Promise.all([maintenanceLoop(),dispatchLoop()]);
  await pool.end();
 }
 process.on('SIGTERM',()=>{running=false});

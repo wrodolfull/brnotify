@@ -45,7 +45,7 @@ A migração preenche next_attempt_at com scheduled_at para os registros antigos
 
 O limite global conservador de ~1 mensagem/segundo equivale teoricamente a até 60 reservas/minuto. É **apenas teto teórico**, não promessa de throughput ou tempo de entrega; as reservas por ambiente, tempo de rede, OAuth e worker reduzem a taxa real. Uma grande fila pode levar bastante tempo. Acompanhe o volume diário e a pontualidade; para escalar posteriormente, use limites homologados com a GoTo e aumente a capacidade conscientemente.
 
-O worker consulta a fila aproximadamente a cada 800 ms e faz a manutenção e entrega de webhooks em ciclos de aproximadamente 10 segundos, sujeito à duração das operações. A aplicação não usa Supabase Edge Functions.
+O worker mantém **dois loops independentes** no mesmo processo: um consulta a fila de mensagens aproximadamente a cada 800 ms; o outro executa manutenção, regras e webhooks de integração em ciclos de aproximadamente 10 segundos. Assim, um webhook externo lento não impede a consulta da fila de WhatsApp, embora o tempo de envio também dependa da GoTo e da rede. A aplicação não usa Supabase Edge Functions.
 
 ## Testes incluídos
 
