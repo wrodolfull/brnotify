@@ -58,3 +58,7 @@ Na integração GoTo Connect, a **Biblioteca de modelos** oferece 12 sugestões 
 ## Segurança de disparos WhatsApp
 
 A fila usa cadência de 1–5 segundos por ambiente, reserva global no PostgreSQL, tratamento de 429 com Retry-After e revisão manual de erros indeterminados. Migração 006 obrigatória. [Guia de segurança dos disparos](docs/SAFE_DISPATCH.md).
+
+## Diagnóstico de envios WhatsApp
+
+O payload valida telefones em E.164 antes de chamar a GoTo, o worker registra resultados de cada tentativa e o cadastro de agendamentos informa quantos lembretes foram realmente programados. [Guia de diagnóstico](docs/WHATSAPP_DELIVERY_DIAGNOSTICS.md).
