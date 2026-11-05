@@ -1,7 +1,7 @@
 /** Validate WhatsApp phone numbers without guessing national digits. */
 export function normalizeWhatsAppPhone(value:unknown):string{
  const raw=String(value??'').trim();
- if(!raw||!/^[+\d\s().-]+$/.test(raw)||raw.includes('+')&&!raw.startsWith('+'))
+ if(!raw||!/^\+?[\d\s().-]+$/.test(raw))
   throw new Error('WhatsApp inválido: use +55, DDD e número');
  const digits=raw.replace(/\D/g,'');
  if(digits.startsWith('00'))throw new Error('WhatsApp inválido: use + e DDI em vez de 00');
