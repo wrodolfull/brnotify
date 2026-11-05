@@ -12,6 +12,7 @@ export function randomTenantDelay():number{
 export function retryAfterMilliseconds(value:string|null,now=Date.now()):number|null{
  if(!value||value.length>120)return null;
  const raw=value.trim();
+ if(/^[+-]\d+$/.test(raw))return null;
  let ms:number;
  if(/^\d+$/.test(raw))ms=Number(raw)*1000;
  else{
