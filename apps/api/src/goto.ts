@@ -81,15 +81,19 @@ export async function syncTemplates(tenantId:string){
 }
 export {buildTemplatePayload,resolveTemplateMediaId,templateFields} from './goto-template.js';
 import type {MediaAttachment} from './goto-media.js';
-export class ProviderError extends Error {constructor(public status:number,detail:string){super(detail)}}
-export async function sendTemplate(tenantId:string,payload:unknown,attachments:MediaAttachment[]=[]){
- const {token,accountKey}=await getAccessToken(tenantId);
- if(!accountKey)throw new Error('Conta GoTo não configurada');
+export function buildMessagingForm(payload:unknown,attachments:MediaAttachment[]=[]){
  const form=new FormData();
  form.append('request',new Blob([JSON.stringify(payload)],{type:'application/json'}),'request.json');
  for(const asset of attachments){
   form.append('attachments',new Blob([new Uint8Array(asset.bytes)],{type:asset.contentType}),asset.filename);
  }
+ return form;
+}
+export class ProviderError extends Error {constructor(public status:number,detail:string){super(detail)}}
+export async function sendTemplate(tenantId:string,payload:unknown,attachments:MediaAttachment[]=[]){
+ const {token,accountKey}=await getAccessToken(tenantId);
+ if(!accountKey)throw new Error('Conta GoTo não configurada');
+ const form=buildMessagingForm(payload,attachments);
  let response:Response;
  try{
   response=await fetch('https://api.goto.com/messaging/v2/accounts/'+encodeURIComponent(accountKey)+'/messages',{
