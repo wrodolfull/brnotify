@@ -86,3 +86,7 @@ Execute a migração `database/005_goto_rich_templates.sql` após a 004. Verifiq
 ## Atualização: cadência de disparos WhatsApp
 
 Pare o worker antes da atualização, execute `database/006_safe_message_dispatch.sql` no Supabase depois da 005, publique backend/worker juntos e reinicie o worker. Veja [Auditoria de disparos](../docs/SAFE_DISPATCH.md).
+
+## API para URA GoTo
+
+Execute a migração `database/007_ivr_on_demand.sql` **após 006**, antes de iniciar o worker atualizado. Veja [Disparo sob demanda](../docs/IVR_WHATSAPP_API.md).

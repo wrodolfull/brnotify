@@ -168,3 +168,7 @@ Execute em ordem no SQL Editor do Supabase:
 3. \`database/003_public_integrations.sql\`
 
 Inicie o backend e worker independentes conforme \`deploy/DEPLOY.md\`. Não utilize Edge Functions, não exponha \`DATABASE_URL\` ou a chave \`SUPABASE_SERVICE_ROLE_KEY\` no frontend.
+
+## URA: disparo de templates sem agendamento
+
+Além de lembretes, o BR Notify aceita `POST /v1/messages/send` com token específico `messages:send`, `to`, `template`, parâmetros opcionais e confirmação da escolha do cliente na URA. Não exige Call ID; evita duplicatas por 120 segundos. Confira [o guia detalhado](IVR_WHATSAPP_API.md).

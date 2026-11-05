@@ -62,3 +62,7 @@ A fila usa cadência de 1–5 segundos por ambiente, reserva global no PostgreSQ
 ## Diagnóstico de envios WhatsApp
 
 O payload valida telefones em E.164 antes de chamar a GoTo, o worker registra resultados de cada tentativa e o cadastro de agendamentos informa quantos lembretes foram realmente programados. [Guia de diagnóstico](docs/WHATSAPP_DELIVERY_DIAGNOSTICS.md).
+
+## API de disparo imediato para URA GoTo
+
+`POST /v1/messages/send` permite enfileirar templates aprovados por token `brn_live_...` com escopo exclusivo `messages:send`, **sem Call ID**. Antiduplicação de 120 segundos, consentimento explícito e mesma cadência do worker. [Guia da URA](docs/IVR_WHATSAPP_API.md).
