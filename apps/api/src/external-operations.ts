@@ -50,6 +50,10 @@ export const reminderPayloadSchema=z.object({
  * Never silently insert the legacy 09:00 default into an external booking.
  */
 export const strictAppointmentSyncSchema=reminderPayloadSchema.extend({
+ contact:contactSchema.extend({
+  consent:z.literal(true),
+  consent_source:z.string().trim().min(2).max(200)
+ }),
  event:dateSchema.extend({time:localTime})
 });
 
