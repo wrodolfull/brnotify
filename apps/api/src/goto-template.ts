@@ -103,7 +103,9 @@ export function buildTemplatePayload(
     continue;
    }
    if(block.type==='buttons'&&inner.type!=='button')
-    throw new Error('Tipo de botão não suportado');
+    throw new Error('Tipo de botão não suportado: '+inner.type);
+   if(block.type!=='buttons'&&inner.type!=='text')
+    throw new Error('Componente de template não suportado: '+inner.type);
    const current=(inner.parameters||[]).map((param:any)=>{
     if(typeof param.name!=='string')throw new Error('Parâmetro de template sem nome');
     const key=block.type==='buttons'?'buttons.'+index+'.'+param.name:block.type+'.'+param.name;
