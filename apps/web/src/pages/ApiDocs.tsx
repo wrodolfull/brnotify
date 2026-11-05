@@ -196,7 +196,7 @@ export function ApiDocs(){
  const variant=selected?.variants[Math.min(variantIndex,Math.max(0,selected.variants.length-1))];
  const methodColor=(method:string)=>method.toLowerCase();
  const schema=selected?(spec.paths[selected.path]?.[selected.method.toLowerCase()]?.requestBody?.content?.['application/json']?.schema):null;
- const responseExample=variant?.response??selected?.response;
+ const responseExample=variant?.response??selected?.response??selected?.variants.find(v=>v.response)?.response;
  const responseStatus=selected?.method==='POST'&&selected.path==='/messages/send'?'202':
   selected?.method==='POST'&&selected.path==='/imports'?'207':
   selected?.method==='POST'&&['/reminders','/events'].includes(selected.path)?'201':'200';

@@ -20,7 +20,7 @@ for(const op of ops){
  assert.ok(op.description.length>20,op.id+' sem explicação adequada');
  assert.ok(op.scopes.length,op.id+' sem scopes');
  assert.ok(op.variants.length,op.id+' sem exemplos');
- assert.ok(op.response,op.id+' sem resposta de exemplo');
+ assert.ok(op.response||op.variants.some(v=>v.response),op.id+' sem resposta de exemplo');
  for(const example of op.variants){
   const expected='/v1'+examplePath(op.path,example.pathParams||{});
   for(const language of ['curl','python','node'] as const){
