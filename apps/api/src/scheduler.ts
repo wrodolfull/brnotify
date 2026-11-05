@@ -58,9 +58,9 @@ export async function processMessages(){
   try{
    await withDispatchTransaction(async run=>{
     await run(
-     "update scheduled_messages set status=$2,error_code=$3,error_description=$4,next_attempt_at=case when $2='scheduled' then $5::timestamptz else next_attempt_at end,locked_at=null,updated_at=now() where id=$1 and status='processing'",
+     "update scheduled_messages set status=$2,error_code=$3,error_description=$4,next_attempt_at=case when $2='scheduled' then $5::timestamptz else next_attempt_at end,goto_message_id=coalesce($6,goto_message_id),sent_at=case when $6::text is not null then coalesce(sent_at,now()) else sent_at end,locked_at=null,updated_at=now() where id=$1 and status='processing'",
      [msg.id,retryType==='retry'?'scheduled':retryType,code,detail.slice(0,350),
-      new Date(Date.now()+retryDelay)]
+      new Date(Date.now()+retryDelay),providerId]
     );
     await run(
      'insert into message_attempts(tenant_id,message_id,outcome,error_detail,provider_status) values($1,$2,$3,$4,$5)',
@@ -107,7 +107,7 @@ export async function handleGotoWebhook(event:any){
   const code=String(payload.deliveryStatus?.code||'');
   const status=description==='DELIVERED'?'delivered':code.startsWith('4')||code.startsWith('5')?'failed':'sent';
   await query(
-   "update scheduled_messages set status=$1,error_code=case when $1='failed' then $2 else null end,error_description=case when $1='failed' then $3 else null end,updated_at=now() where tenant_id=$4 and goto_message_id=$5 and status in ('sent','delivered','failed') and (status<>'delivered' or $1='delivered')",
+   "update scheduled_messages set status=$1,error_code=case when $1='failed' then $2 else null end,error_description=case when $1='failed' then $3 else null end,updated_at=now() where tenant_id=$4 and goto_message_id=$5 and status in ('sent','delivered','failed','unknown') and (status<>'delivered' or $1='delivered') and (status<>'unknown' or $1 in ('delivered','failed'))",
    [status,code,description,tenantId,payload.messageId]
   );
  }
