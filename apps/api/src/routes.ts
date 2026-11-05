@@ -10,6 +10,7 @@ import {oauthURL,exchangeCode,encrypt,getAccessToken,syncTemplates} from './goto
 import {importHandler,downloadTemplate} from './imports.js';
 import {handleGotoWebhook} from './scheduler.js';
 import {env} from './config.js';
+import {attemptAutomaticTemplateSync} from './goto-auto-sync.js';
 import {listVisibleTenants,listTenantOptions} from './tenant-list.js';
 import {loadDashboardTrend} from './dashboard-trend.js';
 
@@ -55,7 +56,18 @@ router.get('/api/goto/callback',wrap(async(req,res)=>{
    "insert into goto_connections(tenant_id,access_token_enc,refresh_token_enc,expires_at,principal) values($1,$2,$3,$4,$5) on conflict(tenant_id) do update set access_token_enc=excluded.access_token_enc,refresh_token_enc=excluded.refresh_token_enc,expires_at=excluded.expires_at,principal=excluded.principal,updated_at=now()",
    [match.rows[0].tenant_id,encrypt(tokens.access_token),encrypt(tokens.refresh_token),new Date(Date.now()+tokens.expires_in*1000),tokens.principal||null]
   );
-  await audit(match.rows[0].tenant_id,match.rows[0].user_id,'goto.connected');
+  const tenantId=match.rows[0].tenant_id as string;
+  await audit(tenantId,match.rows[0].user_id,'goto.connected');
+  // Reconnecting a previously configured account also refreshes templates.
+  const configured=await query('select account_key,from_touchpoint from goto_connections where tenant_id=$1',[tenantId]);
+  if(configured.rows[0]?.account_key&&configured.rows[0]?.from_touchpoint){
+   const sync=await attemptAutomaticTemplateSync(()=>syncTemplates(tenantId));
+   await audit(tenantId,match.rows[0].user_id,'goto.templates_auto_sync',{
+    source:'oauth_reconnected',status:sync.status,...(sync.status==='success'?{count:sync.count}:{})
+   });
+   return res.redirect(env.WEB_URL+'/settings?goto=connected&sync='+sync.status+
+    (sync.status==='success'?'&count='+sync.count:''));
+  }
   return res.redirect(env.WEB_URL+'/settings?goto=connected');
  }catch{return res.redirect(env.WEB_URL+'/settings?goto=error')}
 }));
@@ -287,7 +299,12 @@ router.patch('/api/goto',tenant(true),activeTenant,wrap(async(req,res)=>{
  const input=z.object({account_key:z.string().regex(/^[0-9]{8,24}$/),from_touchpoint:z.string().regex(/^[0-9]{8,24}$/)}).parse(req.body);
  const saved=await query('update goto_connections set account_key=$2,from_touchpoint=$3,updated_at=now() where tenant_id=$1 returning account_key,from_touchpoint',[req.tenantId,input.account_key,input.from_touchpoint]);
  if(!saved.rowCount)return res.status(409).json({error:'Conecte a conta GoTo antes de salvar'});
- res.json(saved.rows[0]);
+ // The configuration is already saved; a provider outage must not roll it back.
+ const sync=await attemptAutomaticTemplateSync(()=>syncTemplates(req.tenantId!));
+ await audit(req.tenantId!,req.actor!.id,'goto.templates_auto_sync',{
+  source:'configuration_saved',status:sync.status,...(sync.status==='success'?{count:sync.count}:{})
+ });
+ res.json({...saved.rows[0],sync});
 }));
 router.post('/api/goto/notifications/subscribe',tenant(true),activeTenant,wrap(async(req,res)=>{
  const channelId=z.string().regex(/^Webhook\.[A-Za-z0-9-]{20,100}$/).parse(req.body.channel_id);
