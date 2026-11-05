@@ -46,6 +46,13 @@ export const reminderPayloadSchema=z.object({
  event:dateSchema,
  reminders:offsetsSchema.optional()
 }).strict();
+/** CRM/clinic synchronization requires the real appointment time.
+ * Never silently insert the legacy 09:00 default into an external booking.
+ */
+export const strictAppointmentSyncSchema=reminderPayloadSchema.extend({
+ event:dateSchema.extend({time:localTime})
+});
+
 
 export type ReminderPayload=z.infer<typeof reminderPayloadSchema>;
 
@@ -122,7 +129,7 @@ export async function upsertExternalContact(
  }
  return update.rows[0];
 }
-export async function saveReminder(tenantId:string,data:ReminderPayload){
+export async function saveReminder(tenantId:string,data:ReminderPayload,options:{requireDispatchReady?:boolean}={}){
  return withTransaction(async run=>{
   await run('select pg_advisory_xact_lock(hashtext($1),hashtext($2))',[tenantId,data.external_id]);
   const tenant=await run('select timezone,status from tenants where id=$1',[tenantId]);
@@ -206,9 +213,40 @@ export async function saveReminder(tenantId:string,data:ReminderPayload){
    event=inserted.rows[0];created=true;
   }
   await rebuildEvent(tenantId,event.id,run);
+  // Report the actual queue, not just the saved event. A strict external sync
+  // MUST reject a booking that cannot produce an actionable WhatsApp reminder.
+  const planned=await run(
+   `select m.id,m.slot,m.scheduled_at,m.status,
+     m.template_id,mt.name as template_name,mt.status as template_status
+    from scheduled_messages m
+    left join message_templates mt on mt.id=m.template_id and mt.tenant_id=m.tenant_id
+    where m.tenant_id=$1 and m.event_id=$2 and m.schedule_revision=$3
+      and m.status in ('scheduled','sent','delivered','unknown')
+    order by m.slot`,
+   [tenantId,event.id,event.schedule_revision]
+  );
+  const pending=planned.rows.filter(r=>r.status==='scheduled');
+  if(options.requireDispatchReady){
+   if(!planned.rowCount)
+    throw new ApiOperationError(409,'Agendamento não sincronizado: nenhuma regra gerou um lembrete futuro. Ajuste a antecedência e o horário das regras no BR Notify.');
+   if(pending.some(r=>!r.template_id||r.template_status!=='APPROVED'))
+    throw new ApiOperationError(409,'Agendamento não sincronizado: vincule um template WhatsApp aprovado a cada lembrete programado no ambiente.');
+   if(pending.length){
+    const connection=await run(
+     'select 1 from goto_connections where tenant_id=$1 and account_key is not null and from_touchpoint is not null',
+     [tenantId]
+    );
+    if(!connection.rowCount)
+     throw new ApiOperationError(409,'Agendamento não sincronizado: configure e conecte o número WhatsApp da GoTo no ambiente.');
+   }
+  }
   return {created,event_id:event.id,external_id:event.external_id,contact_id:contact.id,
-   status:event.status,confirmation_status:event.confirmation_status,
-   schedule_revision:event.schedule_revision};
+   starts_at:event.starts_at,timezone:zone,status:event.status,
+   confirmation_status:event.confirmation_status,schedule_revision:event.schedule_revision,
+   reminders_scheduled:pending.length,
+   reminders:planned.rows.map(r=>({
+    id:r.id,slot:r.slot,scheduled_at:r.scheduled_at,status:r.status,template:r.template_name
+   }))};
  });
 }
 export async function getExternalEvent(tenantId:string,externalId:string){
