@@ -49,8 +49,8 @@ export function planEventDelivery(
  const delivery_mode=input.delivery_mode||'automation';
  const warnings:string[]=[];
  const reminders:PreparedReminder[]=[];
- const start=DateTime.fromJSDate(new Date(input.starts_at),{zone:'utc'});
- const sendDate=input.custom_send_at?DateTime.fromJSDate(new Date(input.custom_send_at),{zone:'utc'}):null;
+ const start=DateTime.fromJSDate(input.starts_at instanceof Date?input.starts_at:new Date(input.starts_at),{zone:'utc'});
+ const sendDate=input.custom_send_at?DateTime.fromJSDate(input.custom_send_at instanceof Date?input.custom_send_at:new Date(input.custom_send_at),{zone:'utc'}):null;
  if(!start.isValid||start.toMillis()<=now)warnings.push('O compromisso precisa ocorrer no futuro para gerar notificações.');
  if(input.status!=='scheduled')warnings.push('O evento não está programado.');
  if(!input.consent||input.opted_out_at)warnings.push('O contato não autorizou o recebimento pelo WhatsApp.');
@@ -129,7 +129,7 @@ export async function previewEventDelivery(
  const connection=await run('select account_key,from_touchpoint from goto_connections where tenant_id=$1',[tenantId]);
  if(!connection.rows[0]?.account_key||!connection.rows[0]?.from_touchpoint)
   plan.warnings.push('Configure o remetente WhatsApp em Integração GoTo antes de enviar.');
- plan.can_schedule=plan.reminders.length>0&&tenant.rows[0].status==='active';
+ plan.can_schedule=plan.reminders.length>0&&tenant.rows[0].status==='active'&&!!connection.rows[0]?.account_key&&!!connection.rows[0]?.from_touchpoint;
  return {...plan,timezone:zone};
 }
 export async function rebuildEvent(tenantId:string,eventId:string,run:SqlRunner=query){
