@@ -94,6 +94,10 @@ export function SettingsPage(){
  const canEdit=role==='admin';
  const fields=selected?templateFields(selected.definition):[];
  const load=()=>api('/api/goto').then(setConn).catch((e:any)=>setError(e.message));
+ useEffect(()=>{
+  // Avoid stale sync results and editor state when switching tenants.
+  setSyncNotice(null);setSelected(null);
+ },[api]);
  useEffect(()=>{void load()},[api]);
  useEffect(()=>{
   if(params.get('goto')!=='connected')return;
