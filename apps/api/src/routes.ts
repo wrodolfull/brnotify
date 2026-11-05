@@ -324,6 +324,11 @@ router.post('/api/messages/:id/retry',tenant(true),activeTenant,wrap(async(req,r
  await audit(req.tenantId!,req.actor!.id,'message.retried',{id:req.params.id});
  res.json({success:true});
 }));
+router.get('/api/templates/options',tenant(),wrap(async(req,res)=>{
+ const result=await query("select id,name,language_code from message_templates where tenant_id=$1 and status='APPROVED' order by name,language_code",[req.tenantId]);
+ res.json({items:result.rows});
+}));
+
 router.get('/api/templates',tenant(),wrap(async(req,res)=>{
  const p=pageParams(req.query.page);
  const items=await query('select id,name,language_code,status,category,definition,variable_map from message_templates where tenant_id=$1 order by name limit 20 offset $2',[req.tenantId,p.offset]);
