@@ -729,6 +729,130 @@ export const openApiDefinition = {
         }
       }
     },
+    "/messages/send": {
+      "post": {
+        "tags": [
+          "Disparos"
+        ],
+        "summary": "Enfileirar template WhatsApp da URA sem Call ID",
+        "description": "Escopo messages:send. Header Authorization: Bearer brn_live_... do ambiente. Requer escolha explícita do usuário na URA; duplicatas idênticas em 120 segundos retornam mesmo request_id.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "to",
+                  "template",
+                  "consent"
+                ],
+                "properties": {
+                  "to": {
+                    "type": "string",
+                    "example": "+5519999999999"
+                  },
+                  "template": {
+                    "type": "string",
+                    "example": "continuar_atendimento_whatsapp"
+                  },
+                  "language": {
+                    "type": "string",
+                    "example": "pt_BR"
+                  },
+                  "name": {
+                    "type": "string",
+                    "example": "Cliente"
+                  },
+                  "variables": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "string"
+                    },
+                    "example": {
+                      "body.parameter_0": "Atendimento"
+                    }
+                  },
+                  "media_asset_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "consent": {
+                    "type": "object",
+                    "required": [
+                      "confirmed",
+                      "source"
+                    ],
+                    "properties": {
+                      "confirmed": {
+                        "type": "boolean",
+                        "const": true
+                      },
+                      "source": {
+                        "type": "string",
+                        "enum": [
+                          "ivr_option_whatsapp",
+                          "explicit_customer_request"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Pedido enfileirado ou deduplicado; não garante entrega"
+          },
+          "401": {
+            "description": "Token inválido"
+          },
+          "403": {
+            "description": "Permissão negada"
+          },
+          "409": {
+            "description": "Conexão GoTo indisponível ou contato com opt-out"
+          },
+          "422": {
+            "description": "Payload inválido ou template não aprovado"
+          },
+          "429": {
+            "description": "Limite de envios por telefone"
+          }
+        }
+      }
+    },
+    "/messages/send/{id}": {
+      "get": {
+        "tags": [
+          "Disparos"
+        ],
+        "summary": "Consultar status do pedido da URA",
+        "description": "Escopo messages:send; exige chave messages:send do mesmo ambiente.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Estado queued,processing,sent,delivered,failed,unknown,cancelled"
+          },
+          "404": {
+            "description": "Pedido não encontrado"
+          }
+        }
+      }
+    },
     "/messages": {
       "get": {
         "tags": [

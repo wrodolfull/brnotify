@@ -96,6 +96,7 @@ export async function handleGotoWebhook(event:any){
    let author='';try{author=phoneE164(p.authorTouchpoint)}catch{}
    const ct=await query("update contacts set consent=false,opted_out_at=now(),updated_at=now() where tenant_id=$1 and phone=$2 returning id",[tenantId,author]);
    for(const c of ct.rows)await query("update scheduled_messages set status='cancelled',updated_at=now() where tenant_id=$1 and event_id in(select id from events where tenant_id=$1 and contact_id=$2) and status='scheduled'",[tenantId,c.id]);
+   await query("update on_demand_messages set status='cancelled',error_code='OPT_OUT',updated_at=now() where tenant_id=$1 and recipient_phone=$2 and status='queued'",[tenantId,author]);
   }else{
    await registerIncomingDecision(tenantId,event.id,p);
   }
@@ -111,6 +112,10 @@ export async function handleGotoWebhook(event:any){
   const status=description==='DELIVERED'?'delivered':code.startsWith('4')||code.startsWith('5')?'failed':'sent';
   const updated=await query(
    "update scheduled_messages set status=$1,error_code=case when $1='failed' then $2 else null end,error_description=case when $1='failed' then $3 else null end,updated_at=now() where tenant_id=$4 and goto_message_id=$5 and status in ('sent','delivered','failed','unknown') and (status<>'delivered' or $1='delivered') and (status<>'unknown' or $1 in ('delivered','failed'))",
+   [status,code,description,tenantId,payload.messageId]
+  );
+  await query(
+   "update on_demand_messages set status=$1,error_code=case when $1='failed' then $2 else null end,error_description=case when $1='failed' then $3 else null end,updated_at=now() where tenant_id=$4 and provider_message_id=$5 and status in ('sent','delivered','failed','unknown') and (status<>'delivered' or $1='delivered') and (status<>'unknown' or $1 in ('delivered','failed'))",
    [status,code,description,tenantId,payload.messageId]
   );
   console.info('[goto-delivery]',JSON.stringify({tenantId,messageId:payload.messageId,status,code,updatedRows:updated.rowCount||0}));

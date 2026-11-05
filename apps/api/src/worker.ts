@@ -1,5 +1,6 @@
 import {pool,query} from './db.js';
 import {processMessages} from './scheduler.js';
+import {processOnDemandMessages,cleanupOnDemandMessages} from './on-demand-worker.js';
 import {expireStaleScheduledMessages} from './send-pacing.js';
 import {rebuildEvent} from './time.js';
 import {processOutboundWebhooks,reclaimOutboundAfterCrash} from './outbound-webhooks.js';
@@ -24,6 +25,7 @@ async function maintenanceLoop(){
    // Resultado indeterminado NÃO autoriza reenvio após crash.
    await query("update scheduled_messages set status='unknown',error_code='WORKER_INTERRUPTED',error_description='Resultado indeterminado após interrupção do worker',locked_at=null,updated_at=now() where status='processing' and locked_at<now()-interval '3 minutes'");
    await expireStaleScheduledMessages();
+   await cleanupOnDemandMessages();
    await rebuildRules();
    await reclaimOutboundAfterCrash();
    await processOutboundWebhooks();
@@ -34,9 +36,13 @@ async function maintenanceLoop(){
  }
 }
 async function dispatchLoop(){
+ let preferIvr=true;
  while(running){
-  try{await processMessages()}
-  catch(e){console.error('[worker-dispatch]',e instanceof Error?e.message:'erro')}
+  try{
+   if(preferIvr){if(!(await processOnDemandMessages()))await processMessages()}
+   else{if(!(await processMessages()))await processOnDemandMessages()}
+   preferIvr=!preferIvr;
+  }catch(e){console.error('[worker-dispatch]',e instanceof Error?e.message:'erro')}
   if(running)await sleep(800);
  }
 }

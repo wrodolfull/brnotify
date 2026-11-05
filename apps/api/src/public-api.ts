@@ -11,6 +11,7 @@ import {
  upsertExternalContact,withTransaction,ApiOperationError
 } from './external-operations.js';
 import {openApiDefinition} from './openapi.js';
+import {enqueueOnDemandMessage,getOnDemandMessage} from './on-demand-queue.js';
 
 export const publicApiRouter=Router();
 const uuid=z.string().uuid();
@@ -92,6 +93,21 @@ publicApiRouter.patch('/events/:externalId',requireScope('events:write'),wrap(as
 publicApiRouter.post('/events/:externalId/cancel',requireScope('events:write'),wrap(async(req,res)=>{
  const id=externalIdSchema.parse(req.params.externalId);
  res.json(await cancelExternalEvent(req.integrationKey!.tenantId,id));
+}));
+/** IVR/CRM single template send. No Call ID or appointment required. */
+publicApiRouter.post('/messages/send',requireScope('messages:send'),wrap(async(req,res)=>{
+ const key=req.integrationKey!;
+ const result=await enqueueOnDemandMessage(key.tenantId,key.id,req.body);
+ res.status(202).json({success:true,request_id:result.id,status:result.status,
+  deduplicated:result.deduplicated,
+  notice:'Pedido aceito para processamento, não confirmação de entrega'});
+}));
+publicApiRouter.get('/messages/send/:id',requireScope('messages:send'),wrap(async(req,res)=>{
+ const id=uuid.parse(req.params.id);
+ const key=req.integrationKey!;
+ const result=await getOnDemandMessage(key.tenantId,id);
+ if(!result)return res.status(404).json({error:'Disparo não encontrado para esta chave'});
+ res.json(result);
 }));
 publicApiRouter.get('/messages',requireScope('messages:read'),wrap(async(req,res)=>{
  const tenantId=req.integrationKey!.tenantId,p=pageParams(req.query.page);

@@ -79,6 +79,10 @@ export async function claimNextDueMessage(){
        select 1 from scheduled_messages inflight
        where inflight.tenant_id=m.tenant_id and inflight.status='processing'
       )
+      and not exists (
+       select 1 from on_demand_messages ivr
+       where ivr.tenant_id=m.tenant_id and ivr.status='processing'
+      )
     order by m.scheduled_at,m.id
     for update of m skip locked limit 1`
   );
