@@ -32,6 +32,13 @@ export async function enqueueOnDemandMessage(tenantId:string,apiKeyId:string,bod
  return withTransaction(async run=>{
   // Serializes identical requests, including when several API replicas are active.
   await run('select pg_advisory_xact_lock(hashtext($1),hashtext($2))',[tenantId,fingerprint]);
+  const suppression=await run(
+   "select opted_out_at from contacts where tenant_id=$1 and phone=$2 for update",
+   [tenantId,input.to]
+  );
+  if(suppression.rows[0]?.opted_out_at)
+   throw new ApiOperationError(409,'Contato com opt-out registrado; novo consentimento precisa ser validado no painel.');
+
   const previous=await run(
    "select id,status,created_at from on_demand_messages where tenant_id=$1 and dedupe_hash=$2 and created_at>now()-($3::int*interval '1 second') order by created_at desc limit 1",
    [tenantId,fingerprint,DEDUPE_WINDOW_SECONDS]
