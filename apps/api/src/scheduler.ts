@@ -1,6 +1,7 @@
 import {DateTime} from 'luxon';
 import {query} from './db.js';
-import {buildTemplatePayload,ProviderError,sendTemplate} from './goto.js';
+import {buildTemplatePayload,resolveTemplateMediaId,ProviderError,sendTemplate} from './goto.js';
+import {downloadTenantMedia} from './goto-media.js';
 import {registerIncomingDecision} from './confirmation.js';
 import {phoneE164} from './time.js';
 
@@ -20,13 +21,14 @@ export async function processMessages(){
    if(v.event_status!=='scheduled'||v.event_revision!==msg.schedule_revision||['reschedule_requested','declined'].includes(v.confirmation_status)||!v.consent||v.opted_out_at)throw new Error('Evento alterado, cancelado ou contato sem consentimento');
    if(!v.template_id||!v.definition||!v.from_touchpoint)throw new Error('Configure um template aprovado e remetente GoTo para este lembrete');
    if(DateTime.fromJSDate(new Date(v.starts_at)).toMillis()<=Date.now())throw new Error('Data do evento já passou');
-   const payload=buildTemplatePayload(
-    {name:v.template_name,language_code:v.language_code,status:v.template_status,definition:v.definition,variable_map:v.variable_map},
-    {name:v.name,phone:v.phone,email:v.email,custom_data:v.custom_data},
-    {title:v.title,event_type:v.event_type,starts_at:v.starts_at,timezone:v.timezone,details:v.event_details},
-    {details:v.record_details},v.from_touchpoint
-   );
-   const providerId=await sendTemplate(msg.tenant_id,payload);
+   const template={name:v.template_name,language_code:v.language_code,status:v.template_status,definition:v.definition,variable_map:v.variable_map};
+   const contact={name:v.name,phone:v.phone,email:v.email,custom_data:v.custom_data};
+   const event={title:v.title,event_type:v.event_type,starts_at:v.starts_at,timezone:v.timezone,details:v.event_details};
+   const record={details:v.record_details};
+   const required=resolveTemplateMediaId(template,{contact,event,record});
+   const attachment=required?await downloadTenantMedia(msg.tenant_id,required.assetId,required.kind):null;
+   const payload=buildTemplatePayload(template,contact,event,record,v.from_touchpoint,attachment?.filename);
+   const providerId=await sendTemplate(msg.tenant_id,payload,attachment?[attachment]:[]);
    await query("update scheduled_messages set status='sent',goto_message_id=$2,sent_at=now(),locked_at=null,updated_at=now() where id=$1",[msg.id,providerId]);
    await query("insert into message_attempts(tenant_id,message_id,outcome,provider_status) values($1,$2,'accepted',201)",[msg.tenant_id,msg.id]);
   }catch(err){

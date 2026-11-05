@@ -46,3 +46,7 @@ O módulo **API e Integrações** permite ao Administrador criar chaves por ambi
 ## Relatório unificado
 
 A tela **Relatório geral**, disponível para Administradores e Visualizadores, consolida notificações, falhas, confirmações e integrações com filtros e exportação CSV. Leia [Relatórios](docs/REPORTS.md).
+
+## Templates ricos GoTo (mídia e botões)
+
+A integração suporta templates com imagens/vídeo/PDF no cabeçalho, botões com variáveis e envios reais de teste. A mídia é privada por ambiente no Supabase Storage. Veja [GoTo — templates ricos](docs/GOTO_RICH_TEMPLATES.md).

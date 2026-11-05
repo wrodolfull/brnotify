@@ -79,47 +79,21 @@ export async function syncTemplates(tenantId:string){
  }
  return updated;
 }
-type Parameter={name:string;value:string};
-function getField(path:string,contact:any,event:any,record:any):string{
- const fields:Record<string,unknown>={
-  'contact.name':contact.name,'contact.phone':contact.phone,'contact.email':contact.email,
-  'event.title':event.title,'event.type':event.event_type,
-  'event.date':new Date(event.starts_at).toLocaleDateString('pt-BR',{timeZone:event.timezone||'America/Sao_Paulo'}),
-  'event.time':new Date(event.starts_at).toLocaleTimeString('pt-BR',{timeZone:event.timezone||'America/Sao_Paulo',hour:'2-digit',minute:'2-digit'})
- };
- if(path.startsWith('record.'))return String(record?.details?.[path.slice(7)]??'');
- if(path.startsWith('contact.custom.'))return String(contact.custom_data?.[path.slice(15)]??'');
- if(path.startsWith('event.custom.'))return String(event.details?.[path.slice(13)]??'');
- return String(fields[path]??'');
-}
-export function buildTemplatePayload(template:any,contact:any,event:any,record:any,from:string){
- if(template.status!=='APPROVED')throw new Error('Template GoTo não aprovado');
- const mapping=template.variable_map||{};
- const components:any[]=[];
- for(const block of template.definition.components||[]){
-  if(!['header','body','footer','buttons'].includes(block.type))throw new Error('Componente de template não suportado');
-  const params:Parameter[]=[];
-  for(const inner of block.components||[]){
-   if(inner.type==='image'||inner.type==='video'||inner.type==='document')throw new Error('Mídia em template não disponível no MVP');
-   if(block.type==='buttons'&&(inner.parameters||[]).length)throw new Error('Botão com variáveis não disponível no MVP');
-   for(const p of inner.parameters||[]){
-    const selector=mapping[p.name];
-    if(!selector)throw new Error('Mapeie a variável obrigatória: '+p.name);
-    const value=selector.startsWith('literal:')?selector.slice(8):getField(selector,contact,event,record);
-    if(!value)throw new Error('Variável sem valor: '+p.name);
-    params.push({name:p.name,value});
-   }
-  }
-  if(params.length)components.push({type:block.type,parameters:params});
+export {buildTemplatePayload,resolveTemplateMediaId,templateFields} from './goto-template.js';
+import type {MediaAttachment} from './goto-media.js';
+export function buildMessagingForm(payload:unknown,attachments:MediaAttachment[]=[]){
+ const form=new FormData();
+ form.append('request',new Blob([JSON.stringify(payload)],{type:'application/json'}),'request.json');
+ for(const asset of attachments){
+  form.append('attachments',new Blob([new Uint8Array(asset.bytes)],{type:asset.contentType}),asset.filename);
  }
- return {channel:'WHATSAPP',from,to:[contact.phone],type:'template',attributes:{name:template.name,languageCode:template.language_code},components};
+ return form;
 }
 export class ProviderError extends Error {constructor(public status:number,detail:string){super(detail)}}
-export async function sendTemplate(tenantId:string,payload:unknown){
+export async function sendTemplate(tenantId:string,payload:unknown,attachments:MediaAttachment[]=[]){
  const {token,accountKey}=await getAccessToken(tenantId);
  if(!accountKey)throw new Error('Conta GoTo não configurada');
- const form=new FormData();
- form.append('request',new Blob([JSON.stringify(payload)],{type:'application/json'}));
+ const form=buildMessagingForm(payload,attachments);
  let response:Response;
  try{
   response=await fetch('https://api.goto.com/messaging/v2/accounts/'+encodeURIComponent(accountKey)+'/messages',{
