@@ -6,7 +6,7 @@ import {
  authenticateApiKey,apiKeyRateLimiter,requireScope,logIntegrationAccess
 } from './integration-keys.js';
 import {
- contactSchema,reminderPayloadSchema,externalIdSchema,
+ contactSchema,reminderPayloadSchema,strictAppointmentSyncSchema,externalIdSchema,
  saveReminder,getExternalEvent,patchExternalEvent,cancelExternalEvent,
  upsertExternalContact,withTransaction,ApiOperationError
 } from './external-operations.js';
@@ -62,6 +62,15 @@ async function writeReminder(req:any,res:any){
 }
 publicApiRouter.post('/reminders',requireScope('events:write'),requireScope('contacts:write'),wrap(writeReminder));
 publicApiRouter.post('/events',requireScope('events:write'),requireScope('contacts:write'),wrap(writeReminder));
+// Guaranteed appointment synchronization for clinic, automotive and CRM systems.
+// Date AND time are mandatory; no success if zero future reminders or missing
+// approved templates / GoTo sender. The operation rolls back atomically.
+publicApiRouter.post('/appointments/sync',requireScope('events:write'),requireScope('contacts:write'),wrap(async(req,res)=>{
+ const input=strictAppointmentSyncSchema.parse(req.body);
+ const saved=await saveReminder(req.integrationKey!.tenantId,input,{requireDispatchReady:true});
+ res.status(saved.created?201:200).json({...saved,dispatch_ready:true});
+}));
+
 
 publicApiRouter.get('/events',requireScope('events:read'),wrap(async(req,res)=>{
  const tenantId=req.integrationKey!.tenantId,p=pageParams(req.query.page);
