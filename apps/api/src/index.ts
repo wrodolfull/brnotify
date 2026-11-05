@@ -7,6 +7,7 @@ import {router} from './routes.js';
 import {publicApiRouter} from './public-api.js';
 import {integrationAdminRouter} from './integration-admin.js';
 import {reportRouter} from './reports.js';
+import {mediaRouter} from './goto-media.js';
 import {ApiOperationError} from './external-operations.js';
 import {WebhookConfigurationError} from './outbound-webhooks.js';
 import {pool} from './db.js';
@@ -20,6 +21,7 @@ app.use(rateLimit({windowMs:60_000,limit:180,standardHeaders:'draft-7',legacyHea
 app.use('/v1',publicApiRouter);
 app.use('/api/integrations',integrationAdminRouter);
 app.use('/api/reports',reportRouter);
+app.use('/api/goto/media',mediaRouter);
 app.use(router);
 app.use((req,res)=>res.status(404).json({error:'Rota não encontrada'}));
 const errorHandler:ErrorRequestHandler=(err,_req,res,_next)=>{
@@ -28,7 +30,7 @@ const errorHandler:ErrorRequestHandler=(err,_req,res,_next)=>{
  if(err?.name==='ZodError')return void res.status(422).json({error:'Dados inválidos',details:err.issues});
  if(err?.code==='23505')return void res.status(409).json({error:'Registro duplicado'});
  if(err?.code==='23503')return void res.status(422).json({error:'Referência inválida'});
- if(err?.code==='LIMIT_FILE_SIZE')return void res.status(413).json({error:'Planilha excede 5 MB'});
+ if(err?.code==='LIMIT_FILE_SIZE')return void res.status(413).json({error:'Arquivo excede o limite de upload configurado'});
  console.error('[API]',err instanceof Error?err.message:'Erro inesperado');
  res.status(500).json({error:env.NODE_ENV==='production'?'Erro interno':err?.message||'Erro interno'});
 };
