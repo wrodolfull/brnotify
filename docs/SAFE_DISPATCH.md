@@ -54,3 +54,7 @@ O worker mantém **dois loops independentes** no mesmo processo: um consulta a f
 - TypeScript, testes de regressão anteriores e build.
 
 **Pendente:** homologar com a GoTo real e confirmar os limites específicos da conta. A auditoria é estática e baseada em CI; não substitui um teste de carga controlado e testes de aceitação em produção.
+
+## Segurança adicional do webhook de entrada GoTo
+
+O callback atual recebe um segredo no caminho `/api/webhooks/goto/:secret`. Por esse motivo, o exemplo Nginx agora desativa o access log especificamente para essa rota, evitando gravar o segredo como parte da URL. Se usar Cloudflare, outro proxy ou ferramenta APM, desabilite logs da URL completa também nesse caminho, use HTTPS e rotacione o segredo se ele tiver sido exposto. A mudança do exemplo Nginx não altera configurações já em produção; aplique-a manualmente na VPS.
