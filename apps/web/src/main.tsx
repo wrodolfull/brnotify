@@ -7,4 +7,5 @@ import './design-v2.css';
 import './integrations.css';
 import './reports.css';
 import './goto-rich.css';
+import './template-library.css';
 createRoot(document.getElementById('root')!).render(<React.StrictMode><BrowserRouter><App/></BrowserRouter></React.StrictMode>);

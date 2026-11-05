@@ -1,5 +1,5 @@
 import {useEffect,useState,type FormEvent} from 'react';
-import {useSearchParams} from 'react-router-dom';
+import {Link,useSearchParams} from 'react-router-dom';
 import {useApp} from '../context';
 import {Button,Card,Empty,ErrorHint,Input,Loader,PageTitle,Pagination,Status,useList} from '../components';
 
@@ -209,6 +209,10 @@ export function SettingsPage(){
    </Card>
   </div>
 
+  <div className="goto-catalog-banner">
+   <div><strong>Modelos prontos para cadastrar na Meta</strong><span>12 sugestões por segmento, com variáveis, mídias, botões e mapeamento guiado.</span></div>
+   <Link to="/template-library" className="goto-catalog-link">Explorar biblioteca</Link>
+  </div>
   <Card>
    <div className="card-heading"><div><h2>Templates do WhatsApp</h2><p>Selecione um template sincronizado para configurar cada componente.</p></div>
    {canEdit&&<Button secondary onClick={sync} disabled={busy||!conn?.connected||!conn?.account_key||!conn?.from_touchpoint}>Sincronizar</Button>}
