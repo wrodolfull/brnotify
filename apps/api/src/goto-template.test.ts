@@ -117,3 +117,12 @@ test('buildTemplatePayload uses E.164 and rejects malformed recipient before pro
  assert.deepEqual(payload.to,['+5519999999999']);
  assert.throws(()=>buildTemplatePayload(template,{...contact,phone:'+5509999999999'}, {},null,'137169456416846'),/WhatsApp/);
 });
+
+test('formato nacional e +55 produzem o mesmo payload GoTo',()=>{
+ const model={name:'reminder',language_code:'pt_BR',status:'APPROVED',definition:{components:[]},variable_map:{}};
+ const from='137169456416846';
+ const national=buildTemplatePayload(model,{name:'Contato',phone:'19982714339'}, {},null,from);
+ const international=buildTemplatePayload(model,{name:'Contato',phone:'+5519982714339'}, {},null,from);
+ assert.deepEqual(national,international);
+ assert.deepEqual(national.to,['+5519982714339']);
+});

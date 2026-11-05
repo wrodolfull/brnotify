@@ -52,3 +52,10 @@
  .goto-media-upload>.field{width:100%}
 }
 @media(max-width:420px){.goto-capabilities{grid-template-columns:1fr}}
+
+.goto-test-history{border-top:1px solid #eef1f4;margin-top:16px;padding-top:15px}
+.goto-test-history-header{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.goto-test-history-header strong{font-size:12px;color:#263647}
+.goto-test-history-row{border-bottom:1px solid #eef1f4;padding:11px 0;display:flex;flex-direction:column;gap:4px}
+.goto-test-history-row strong{font-size:11px;color:#263647}
+.goto-test-history-row small{font-size:10px;color:#82909e;overflow-wrap:anywhere}

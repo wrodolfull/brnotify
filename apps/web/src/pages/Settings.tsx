@@ -80,6 +80,7 @@ export function SettingsPage(){
  const [params]=useSearchParams();
  const templates=useList('/api/templates');
  const media=useList('/api/goto/media');
+ const testHistory=useList('/api/goto/templates/tests',role==='admin');
  const [conn,setConn]=useState<any>(null);
  const [busy,setBusy]=useState(false);
  const [error,setError]=useState('');
@@ -166,7 +167,8 @@ export function SettingsPage(){
      ...(testAsset?{media_asset_id:testAsset}:{})
     })
    });
-   setTestResult('Mensagem aceita pela GoTo. ID: '+result.message_id);
+   setTestResult('Mensagem aceita pela GoTo (entrega ainda não confirmada). ID: '+result.message_id);
+   testHistory.refresh();
    notify('Envio de teste aceito pela GoTo');
   }catch(e:any){setError(e.message)}finally{setBusy(false)}
  }
@@ -296,6 +298,25 @@ export function SettingsPage(){
      {testResult&&<div className="success-line">{testResult}</div>}
      <ErrorHint error={error}/>
     </form>
+    <div className="goto-test-history">
+     <div className="goto-test-history-header">
+      <strong>Últimos envios de teste</strong>
+      <button type="button" className="text-link" onClick={testHistory.refresh}>Atualizar status</button>
+     </div>
+     <p className="goto-help">A aceitação da API não confirma a entrega. O resultado só aparece se o webhook DELIVERY_STATUS da GoTo estiver ativo.</p>
+     {testHistory.error&&<ErrorHint error={testHistory.error}/>}
+     {testHistory.data.items.length?
+      testHistory.data.items.map((item:any)=><div className="goto-test-history-row" key={item.id}>
+       <strong>{item.delivery_status==='DELIVERED'?'Entregue':
+        item.delivery_status==='AWAITING_DELIVERY_STATUS'?'Aguardando retorno da GoTo':
+        item.delivery_status==='NO_PROVIDER_CONFIRMATION'?'Sem confirmação de aceite':
+        item.delivery_status==='INVALID_DESTINATION'?'Não entregue: destinatário inválido':
+        item.delivery_status||'Sem informação de entrega'}</strong>
+       <small>{new Date(item.created_at).toLocaleString('pt-BR')} · Destino #{item.recipient_fingerprint}</small>
+       <small>ID GoTo: {item.provider_message_id||'Não registrado'}{item.delivery_code?' · Código '+item.delivery_code:''}</small>
+      </div>):
+      <p className="goto-muted">Nenhuma tentativa de teste neste ambiente.</p>}
+    </div>
    </Card>}
   </>}
  </div>;

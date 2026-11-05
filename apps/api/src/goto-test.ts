@@ -10,6 +10,7 @@ import {phoneE164} from './time.js';
 import {ApiOperationError} from './external-operations.js';
 import {reserveDirectSend,deferAfterRateLimit,retryDelayMilliseconds} from './send-pacing.js';
 import {env} from './config.js';
+import {listTemplateTestHistory} from './goto-test-history.js';
 
 export const gotoTestRouter=Router();
 gotoTestRouter.use(authenticate,tenant(true),activeTenant);
@@ -19,6 +20,11 @@ const bodySchema=z.object({
  test_values:z.record(z.string().max(1024)).default({}),
  media_asset_id:z.string().uuid().optional()
 }).strict();
+
+gotoTestRouter.get('/tests',wrap(async(req,res)=>{
+ const items=await listTemplateTestHistory(req.tenantId!);
+ res.json({items,total:items.length,page:1,pages:1});
+}));
 
 gotoTestRouter.post('/:id/test',wrap(async(req,res)=>{
  const templateId=z.string().uuid().parse(req.params.id);
@@ -69,6 +75,11 @@ gotoTestRouter.post('/:id/test',wrap(async(req,res)=>{
   throw e;
  }
  await query('update goto_test_sends set provider_message_id=$2 where id=$1',[logId,providerId]);
+ console.info('[goto-test]',JSON.stringify({
+  event:'accepted',testId:logId,providerMessageId:providerId,
+  recipientFingerprint:hash.slice(0,12),
+  submittedFormat:input.phone.trim().startsWith('+')?'international':'national'
+ }));
  await audit(req.tenantId!,req.actor!.id,'goto.template_test_sent',{templateId,requestId:logId});
  res.status(201).json({accepted:true,message_id:providerId,notice:'Mensagem aceita pela GoTo; confirme a entrega pelo WhatsApp ou canal de notificações'});
 }));
