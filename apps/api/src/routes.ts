@@ -11,6 +11,7 @@ import {importHandler,downloadTemplate} from './imports.js';
 import {handleGotoWebhook} from './scheduler.js';
 import {env} from './config.js';
 import {listVisibleTenants,listTenantOptions} from './tenant-list.js';
+import {loadDashboardTrend} from './dashboard-trend.js';
 
 export const router=Router();
 const upload=multer({storage:multer.memoryStorage(),limits:{fileSize:5*1024*1024,files:1},fileFilter:(_r,f,cb)=>{
@@ -124,43 +125,8 @@ router.get('/api/dashboard',tenant(),wrap(async(req,res)=>{
   query('select count(*)::int n from contacts where tenant_id=$1',[t]),
   query("select count(*)::int n from events where tenant_id=$1 and status='scheduled' and starts_at>now()",[t]),
   query("select m.id,m.status,m.scheduled_at,m.error_description,c.name,e.title from scheduled_messages m join events e on e.id=m.event_id and e.tenant_id=m.tenant_id join contacts c on c.id=e.contact_id and c.tenant_id=m.tenant_id where m.tenant_id=$1 order by m.updated_at desc limit 8",[t]),
-  // Agregação por dia local do ambiente. Retorna 14 pontos, mesmo em dias sem movimentação.
-  query(`
-    with zone as (select timezone from tenants where id=$1),
-    days as (
-      select generate_series(
-        ((now() at time zone z.timezone)::date - 13)::timestamp,
-        ((now() at time zone z.timezone)::date)::timestamp,
-        interval '1 day'
-      )::date as day from zone z
-    ),
-    accepted as (
-      select (m.sent_at at time zone t.timezone)::date day, count(*)::int total
-      from scheduled_messages m join tenants t on t.id=m.tenant_id
-      where m.tenant_id=$1 and m.sent_at>=now()-interval '15 days'
-      group by 1
-    ),
-    delivered as (
-      select (m.updated_at at time zone t.timezone)::date day, count(*)::int total
-      from scheduled_messages m join tenants t on t.id=m.tenant_id
-      where m.tenant_id=$1 and m.status='delivered' and m.updated_at>=now()-interval '15 days'
-      group by 1
-    ),
-    failed as (
-      select (m.updated_at at time zone t.timezone)::date day, count(*)::int total
-      from scheduled_messages m join tenants t on t.id=m.tenant_id
-      where m.tenant_id=$1 and m.status='failed' and m.updated_at>=now()-interval '15 days'
-      group by 1
-    )
-    select to_char(d.day,'YYYY-MM-DD') day,
-      coalesce(a.total,0)::int sent,
-      coalesce(v.total,0)::int delivered,
-      coalesce(f.total,0)::int failed
-    from days d left join accepted a on a.day=d.day
-    left join delivered v on v.day=d.day
-    left join failed f on f.day=d.day
-    order by d.day asc
-  `,[t]),
+  // Consulta de tendência validada em PostgreSQL pelo CI.
+  loadDashboardTrend(t),
   query(`
     select m.id,m.scheduled_at,c.name,e.title
     from scheduled_messages m

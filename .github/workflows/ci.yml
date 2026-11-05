@@ -43,6 +43,10 @@ jobs:
         env:
           CI_DATABASE_URL: postgresql://postgres:test@127.0.0.1:5432/brnotify_ci
         run: npx tsx apps/api/scripts/tenant-visibility-smoke.ts
+      - name: Dashboard daily trend SQL regression test
+        env:
+          CI_DATABASE_URL: postgresql://postgres:test@127.0.0.1:5432/brnotify_ci
+        run: npx tsx apps/api/scripts/dashboard-smoke.ts
       - name: Report SQL integration test
         env:
           CI_DATABASE_URL: postgresql://postgres:test@127.0.0.1:5432/brnotify_ci
