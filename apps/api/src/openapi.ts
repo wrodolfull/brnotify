@@ -831,7 +831,7 @@ export const openApiDefinition = {
           "Disparos"
         ],
         "summary": "Consultar status do pedido da URA",
-        "description": "Escopo messages:send; exige a mesma chave que criou o pedido.",
+        "description": "Escopo messages:send; exige chave messages:send do mesmo ambiente.",
         "parameters": [
           {
             "name": "id",

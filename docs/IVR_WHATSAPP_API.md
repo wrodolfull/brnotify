@@ -64,7 +64,7 @@ GET https://API-PUBLICA-DO-BRNOTIFY/v1/messages/send/UUID_DO_PEDIDO
 Authorization: Bearer brn_live_SUA_CHAVE
 ```
 
-Status possíveis: `queued`, `processing`, `sent` (aceito pela GoTo), `delivered`, `failed`, `unknown` (incerto, não reenviar automaticamente) e `cancelled`. O endpoint de consulta aceita somente a mesma chave que criou o pedido, mantendo isolamento entre ambientes.
+Status possíveis: `queued`, `processing`, `sent` (aceito pela GoTo), `delivered`, `failed`, `unknown` (incerto, não reenviar automaticamente) e `cancelled`. O endpoint de consulta aceita qualquer chave ativa com permissão `messages:send` **do mesmo ambiente**, mantendo isolamento entre empresas. Isso permite consultar uma solicitação deduplicada mesmo quando duas chaves do mesmo ambiente fizeram a mesma chamada.
 
 ## Consentimento, segurança e limites
 
