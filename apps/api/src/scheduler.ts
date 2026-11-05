@@ -43,6 +43,7 @@ export async function processMessages(){
    );
    await run("insert into message_attempts(tenant_id,message_id,outcome,provider_status) values($1,$2,'accepted',201)",[msg.tenant_id,msg.id]);
   });
+  console.info('[worker-dispatch]',JSON.stringify({event:'goto_accepted',messageId:msg.id,tenantId:msg.tenant_id,slot:msg.slot,providerMessageId:providerId}));
  }catch(err){
   const p=err instanceof ProviderError?err:null;
   const retryType=providerId?'unknown':err instanceof StaleReminderError?'cancelled':p?classifyProviderFailure(p.status,msg.attempt_count):'failed';
@@ -68,6 +69,7 @@ export async function processMessages(){
      [msg.tenant_id,msg.id,retryType,detail.slice(0,350),p?.status??null]
     );
    });
+   console.warn('[worker-dispatch]',JSON.stringify({event:'goto_result',messageId:msg.id,tenantId:msg.tenant_id,slot:msg.slot,status:retryType,code}));
   }catch(persistErr){
    // Permanecer em "processing" é deliberado: o watchdog marca UNKNOWN,
    // sem reenvio automático, caso o banco tenha caído depois do envio.

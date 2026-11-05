@@ -1,12 +1,8 @@
 import {DateTime} from 'luxon';
 import {query} from './db.js';
+import {normalizeWhatsAppPhone} from './whatsapp-phone.js';
 
-export function phoneE164(v:unknown){
- const digits=String(v??'').replace(/\D/g,'');
- const full=digits.length===10||digits.length===11?'55'+digits:digits;
- if(full.length<11||full.length>15)throw new Error('WhatsApp inválido; informe DDD e número');
- return '+'+full;
-}
+export function phoneE164(v:unknown){return normalizeWhatsAppPhone(v)}
 export function toUTC(value:string,timezone:string){
  // Aceita data local YYYY-MM-DD ou data/hora local YYYY-MM-DDTHH:mm.
  const dt=DateTime.fromISO(value,{zone:timezone});

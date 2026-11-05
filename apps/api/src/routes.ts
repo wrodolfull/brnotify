@@ -208,8 +208,10 @@ router.post('/api/events',tenant(true),activeTenant,wrap(async(req,res)=>{
   [req.tenantId,input.contact_id,input.record_id||null,input.title,input.event_type||'reminder',toUTC(input.starts_at,t.rows[0].timezone),JSON.stringify(input.details||{}),input.reminder_overrides?JSON.stringify(input.reminder_overrides):null,input.confirmation_enabled??false,input.confirmation_enabled?'pending':'not_requested']
  );
  await rebuildEvent(req.tenantId!,saved.rows[0].id);
- await audit(req.tenantId!,req.actor!.id,'event.created',{id:saved.rows[0].id});
- res.status(201).json(saved.rows[0]);
+ const q=await query("select count(*)::int as n from scheduled_messages where tenant_id=$1 and event_id=$2 and status='scheduled'",[req.tenantId,saved.rows[0].id]);
+ const reminders_scheduled=Number(q.rows[0]?.n||0);
+ await audit(req.tenantId!,req.actor!.id,'event.created',{id:saved.rows[0].id,reminders_scheduled});
+ res.status(201).json({...saved.rows[0],reminders_scheduled});
 }));
 router.patch('/api/events/:id',tenant(true),activeTenant,wrap(async(req,res)=>{
  const input=eventInput.omit({contact_id:true,record_id:true}).partial().extend({status:z.enum(['scheduled','cancelled','completed']).optional()}).parse(req.body);
