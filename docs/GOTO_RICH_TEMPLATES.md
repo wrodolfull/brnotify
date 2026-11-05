@@ -95,3 +95,11 @@ Teste com uma conta GoTo real, um número autorizado e modelos aprovados. O acom
 - Um modelo com parâmetros obrigatórios sem mapeamento ou com mídia inválida falha de forma explícita, sem disparo improvisado.
 - Suporte aos botões depende do conteúdo do template aprovado; nenhum botão interativo é inventado pelo BR Notify.
 - O painel exibe a **estrutura textual** do template; a aparência final pode variar no aplicativo WhatsApp.
+
+## Sincronização automática de templates
+
+Na tela **Integração GoTo**, depois de autorizar a conta, informe **Account Key** e **ID do número WhatsApp na Meta** e clique em **Salvar e sincronizar templates**. O backend persiste a configuração e consulta imediatamente o endpoint de modelos da GoTo, utilizando o `ownerTouchpoint` escolhido. Os modelos retornados são exibidos na mesma página, com o mapeamento existente preservado.
+
+Ao **reconectar** por OAuth um ambiente que já tinha esses dois identificadores salvos, a sincronização também é executada automaticamente. O botão **Sincronizar novamente** continua disponível para buscar modelos recém-aprovados pela Meta ou repetir uma tentativa.
+
+Se a GoTo estiver indisponível ou retornar 401, 403 ou 429, a configuração **continua salva** e a tela exibe um aviso. Nenhuma mensagem é enviada por essa consulta. Se a GoTo retornar zero modelos, a página informa isso sem tratar como falha. A sincronização é iniciada por ação do administrador (salvar/reconectar) e não roda em loop a cada abertura da página, evitando consultas desnecessárias.
