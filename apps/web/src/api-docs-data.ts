@@ -137,6 +137,57 @@ export const endpointDocs:Record<string,DocsMeta>={
       "consent": false
     }
   },
+  "POST /appointments/sync": {
+    "title": "Sincronizar agendamento externo",
+    "description": "Receba um agendamento de clínica, concessionária ou CRM. Cria o contato, vincula o compromisso e confirma que existe pelo menos um lembrete WhatsApp pronto para ser enviado.",
+    "scope": ["contacts:write","events:write"],
+    "hints": [
+      "Obrigatório informar event.date, event.time, contact.consent=true e contact.consent_source.",
+      "Data e horário são interpretados no fuso configurado do ambiente, sem horário padrão incorreto.",
+      "HTTP 201 ou 200 confirma evento com lembrete futuro ou tentativa já processada.",
+      "Sem regra futura, template aprovado ou remetente GoTo, a API devolve HTTP 409 e desfaz toda a transação.",
+      "Reutilize external_id para atualizar o compromisso e evitar duplicatas.",
+      "O envio ocorre pelo worker; entrega final depende do status posterior da GoTo."
+    ],
+    "variants": [
+      {
+        "id":"clinic","label":"Clínica","description":"Consulta com data, hora e autorização.",
+        "body":{
+          "external_id":"CONSULTA-2027-0081",
+          "contact":{"external_id":"PACIENTE-245","name":"Mariana Lima","phone":"+5519999999999","consent":true,"consent_source":"Aceite registrado no agendamento"},
+          "event":{"title":"Consulta agendada","type":"consulta","date":"2027-01-15","time":"14:30","timezone":"America/Sao_Paulo","confirmation_enabled":true},
+          "reminders":[{"before":1,"unit":"days","send_time":"09:00"}]
+        }
+      },
+      {
+        "id":"automotive","label":"Automotivo","description":"Revisão com veículo e lembretes.",
+        "body":{
+          "external_id":"OS-2027-1045",
+          "contact":{"external_id":"CLIENTE-102","name":"Carlos Silva","phone":"+5519888887777","consent":true,"consent_source":"Autorização no CRM"},
+          "record":{"type":"vehicle","external_id":"CAR-ABC1D23","label":"Corolla ABC1D23","details":{"model":"Corolla","plate":"ABC1D23"}},
+          "event":{"title":"Revisão de veículo","type":"revisao","date":"2027-02-10","time":"10:00","timezone":"America/Sao_Paulo"},
+          "reminders":[{"before":3,"unit":"days","send_time":"09:00"},{"before":1,"unit":"days","send_time":"09:00"}]
+        }
+      },
+      {
+        "id":"reschedule","label":"Reagendamento","description":"Mesmo external_id com nova data e hora.",
+        "body":{
+          "external_id":"CONSULTA-2027-0081",
+          "contact":{"external_id":"PACIENTE-245","name":"Mariana Lima","phone":"+5519999999999","consent":true,"consent_source":"Aceite registrado no agendamento"},
+          "event":{"title":"Consulta reagendada","type":"consulta","date":"2027-01-22","time":"16:00","timezone":"America/Sao_Paulo","confirmation_enabled":true},
+          "reminders":[{"before":1,"unit":"days","send_time":"09:00"}]
+        }
+      }
+    ],
+    "response":{
+      "created":true,"event_id":"00000000-0000-4000-8000-000000000021",
+      "external_id":"CONSULTA-2027-0081","contact_id":"00000000-0000-4000-8000-000000000022",
+      "starts_at":"2027-01-15T17:30:00.000Z","timezone":"America/Sao_Paulo",
+      "status":"scheduled","confirmation_status":"pending","schedule_revision":1,
+      "reminders_scheduled":1,"dispatch_ready":true,
+      "reminders":[{"id":"00000000-0000-4000-8000-000000000023","slot":1,"scheduled_at":"2027-01-14T12:00:00.000Z","status":"scheduled","template":"lembrete_consulta"}]
+    }
+  },
   "POST /reminders": {
     "title": "Criar agendamento e lembretes",
     "description": "Cria ou atualiza contato, registro e compromisso em uma única chamada. Usa external_id para evitar agendamentos duplicados.",

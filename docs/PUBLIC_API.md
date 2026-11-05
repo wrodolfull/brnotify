@@ -12,6 +12,46 @@ Esta API foi criada para integrações **servidor a servidor**. Os endpoints usa
 
 Cada chave está vinculada a um único ambiente. Não envie \`tenant_id\` no body ou no header: o backend determina o ambiente por assinatura da chave.
 
+### Recomendado para sistemas de agendamento: sincronização garantida
+
+Para clínicas, concessionárias, oficinas e outros sistemas que **devem** registrar o compromisso e deixar notificações prontas, use **`POST /v1/appointments/sync`** (escopos `contacts:write` + `events:write`). Um único POST cria ou atualiza contato, registro opcional, evento, data/hora e lembretes.
+
+```http
+POST /v1/appointments/sync
+Authorization: Bearer brn_live_SUA_CHAVE
+Content-Type: application/json
+```
+
+```json
+{
+  "external_id": "CONSULTA-2027-81",
+  "contact": {
+    "external_id": "PACIENTE-245",
+    "name": "Mariana Lima",
+    "phone": "+5519999999999",
+    "consent": true,
+    "consent_source": "Aceite no sistema de agendamento"
+  },
+  "event": {
+    "title": "Consulta marcada",
+    "type": "consulta",
+    "date": "2027-01-15",
+    "time": "14:30",
+    "timezone": "America/Sao_Paulo",
+    "confirmation_enabled": true
+  },
+  "reminders": [{"before": 1, "unit": "days", "send_time": "09:00"}]
+}
+```
+
+**Obrigatório:** `external_id`, `contact.name`, `contact.phone`, `contact.consent=true`, `contact.consent_source`, `event.title`, `event.date` e `event.time`. O fuso horário utilizado é o do ambiente. Nenhum horário padrão é inventado quando o CRM não informa um horário.
+
+**Condições de sucesso:** o ambiente deve ter regras que gerem **ao menos um lembrete futuro**, todos os lembretes ainda pendentes devem possuir templates com status `APPROVED`, e o remetente WhatsApp deve estar configurado na GoTo. Se alguma condição falhar, a API retorna **HTTP 409** e **desfaz contato, evento e mensagens da transação**, para que o CRM não registre uma sincronização falsa.
+
+Respostas HTTP **201** (criado) ou **200** (atualizado) incluem `starts_at` em UTC, `timezone`, `reminders_scheduled`, os horários reais de `reminders` e `dispatch_ready=true`. O mesmo `external_id` pode ser reenviado com data/hora alteradas: o compromisso é atualizado e a fila é recalculada sem criar outro evento.
+
+A confirmação é de **programação válida na fila**, não de entrega. O worker continua responsável pelo envio e o status `delivered` depende dos webhooks da GoTo. Solicitações que aconteçam perto demais da data, após o horário programado para lembrete, são rejeitadas com mensagem clara para ajuste.
+
 ### Endpoint principal: cadastrar tudo em uma chamada
 
 \`\`\`http

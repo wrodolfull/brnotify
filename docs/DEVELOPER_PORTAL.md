@@ -28,3 +28,7 @@ npm run dev:api
 npm run dev:web
 ```
 Abra `http://localhost:5173/docs`, selecione **Disparar WhatsApp pela URA** e alterne entre exemplos **Envio simples**, **Com variáveis**, **Botão com URL** e **Cabeçalho com mídia**. Em outra aba, confirme que a plataforma permanece disponível em `/`.
+
+## Sistema de agendamento externo (clínicas, oficinas, concessionárias)
+
+A seção **Agendamentos → Sincronizar agendamento externo** documenta `POST /v1/appointments/sync` com cenários **Clínica**, **Automotivo** e **Reagendamento**. Esse endpoint é a opção indicada quando data, hora, consentimento e fila de WhatsApp **não podem ser opcionais**. Se o BR Notify não conseguir gerar ao menos uma notificação futura corretamente configurada, retorna 409 sem persistir o agendamento.

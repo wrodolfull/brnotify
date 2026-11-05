@@ -70,3 +70,7 @@ O payload valida telefones em E.164 antes de chamar a GoTo, o worker registra re
 ## Portal de documentação para desenvolvedores
 
 Acesse **`/docs`** (por exemplo `http://localhost:5173/docs`) para navegar pelos endpoints públicos do BR Notify sem login, consultar escopos e exemplos de integração em **cURL, Python e Node.js**. A documentação tem índice lateral por recurso, busca, múltiplos cenários por endpoint e exemplos de respostas. O botão **Documentação** em **API e Integrações** abre o portal. O JSON OpenAPI continua disponível em `/v1/openapi.json` na API. Os exemplos usam dados fictícios e não executam requisições automaticamente.
+
+## Integrações de agendamentos de clínicas e CRMs
+
+Use **`POST /v1/appointments/sync`** para importar um agendamento completo do sistema externo. Contato, consentimento, título, data e **horário são obrigatórios**. A API cria/atualiza contato, registro opcional e compromisso no mesmo ambiente; só confirma sucesso se houver lembrete futuro com template aprovado e remetente GoTo configurado. Retorna horários efetivamente programados e não gera cadastros parciais quando faltam pré-requisitos. `external_id` permite reagendar sem duplicar. Veja [docs/PUBLIC_API.md](docs/PUBLIC_API.md) e a página pública `/docs`.
