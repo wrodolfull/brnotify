@@ -2,6 +2,7 @@ import {Router} from 'express';
 import crypto from 'node:crypto';
 import multer from 'multer';
 import {z} from 'zod';
+import {ruleInput} from './rule-validation.js';
 import {query,pageParams,makeSlug,audit} from './db.js';
 import {authenticate,requireSuper,tenant,activeTenant,wrap,supabase} from './auth.js';
 import {segments} from './segments.js';
@@ -42,10 +43,6 @@ const eventPreviewInput=eventFields.pick({
  if(x.delivery_mode==='custom'&&(!x.custom_send_at||!x.custom_template_id))
   ctx.addIssue({code:z.ZodIssueCode.custom,message:'Selecione data, hora e template para visualizar o disparo'});
 });
-const ruleInput=z.array(z.object({
- slot:z.number().int().min(1).max(3),enabled:z.boolean(),offset_value:z.number().int().min(1).max(365),
- offset_unit:z.enum(['days','weeks','months']),send_time:z.string().regex(/^\d{2}:\d{2}$/),template_id:uuid.nullable().optional()
-})).length(3);
 const deny=(req:any,res:any)=>{if(!req.actor?.superAdmin)return res.status(403).json({error:'Somente Super Admin'});};
 
 router.get('/health',(_req,res)=>res.json({ok:true,app:'brnotify-api'}));
@@ -292,7 +289,7 @@ router.patch('/api/events/:id',tenant(true),activeTenant,wrap(async(req,res)=>{
 }));
 router.get('/api/reminder-rules',tenant(),wrap(async(req,res)=>{
  const result=await query('select * from reminder_rules where tenant_id=$1 order by slot',[req.tenantId]);
- res.json(result.rows);
+ res.json(result.rows.map(row=>({...row,send_time:String(row.send_time).slice(0,5)})));
 }));
 router.put('/api/reminder-rules',tenant(true),activeTenant,wrap(async(req,res)=>{
  const rules=ruleInput.parse(req.body);
