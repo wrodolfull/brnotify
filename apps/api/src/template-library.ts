@@ -620,6 +620,8 @@ export function suggestMapping(preset:CatalogPreset,definition:Record<string,any
   const head=(section('header')?.components||[]).find((x:any)=>['image','video','document'].includes(x.type));
   if(media.length!==1||head?.type!==expected)issues.push('Tipo de mídia do cabeçalho diferente');
  }else if(media.length)issues.push('Este modelo não prevê mídia');
+ if(!preset.header&&section('header'))issues.push('Cabeçalho inesperado');
+ if(fields.some(f=>f.key.startsWith('footer.')))issues.push('Parâmetros extras no rodapé');
  const expectedHeader=preset.variables.filter(v=>v.part==='header');
  const gotHeader=fields.filter(f=>f.key.startsWith('header.')&&f.kind==='text');
  if(expectedHeader.length!==gotHeader.length)issues.push('Variáveis do cabeçalho diferentes');

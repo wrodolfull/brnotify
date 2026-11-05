@@ -1,4 +1,4 @@
-import {useEffect,useMemo,useRef,useState} from 'react';
+import {useEffect,useMemo,useRef,useState,type ReactNode} from 'react';
 import {Link} from 'react-router-dom';
 import {useApp} from '../context';
 import {Button,Card,ErrorHint,Loader,PageTitle} from '../components';
@@ -52,7 +52,7 @@ function metaKit(model:Preset){
  ];
  return lines.join('\n');
 }
-function CardFlag({children}:{children:React.ReactNode}){return <span className="catalog-pill">{children}</span>}
+function CardFlag({children}:{children:ReactNode}){return <span className="catalog-pill">{children}</span>}
 export function TemplateLibrary(){
  const {api,role,segment:tenantSegment,notify,tenantId}=useApp();
  const [items,setItems]=useState<Preset[]>([]);
