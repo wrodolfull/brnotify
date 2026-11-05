@@ -8,6 +8,7 @@ import {publicApiRouter} from './public-api.js';
 import {integrationAdminRouter} from './integration-admin.js';
 import {reportRouter} from './reports.js';
 import {mediaRouter} from './goto-media.js';
+import {gotoTestRouter} from './goto-test.js';
 import {ApiOperationError} from './external-operations.js';
 import {WebhookConfigurationError} from './outbound-webhooks.js';
 import {pool} from './db.js';
@@ -22,6 +23,7 @@ app.use('/v1',publicApiRouter);
 app.use('/api/integrations',integrationAdminRouter);
 app.use('/api/reports',reportRouter);
 app.use('/api/goto/media',mediaRouter);
+app.use('/api/goto/templates',gotoTestRouter);
 app.use(router);
 app.use((req,res)=>res.status(404).json({error:'Rota não encontrada'}));
 const errorHandler:ErrorRequestHandler=(err,_req,res,_next)=>{
