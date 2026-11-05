@@ -66,3 +66,7 @@ O payload valida telefones em E.164 antes de chamar a GoTo, o worker registra re
 ## API de disparo imediato para URA GoTo
 
 `POST /v1/messages/send` permite enfileirar templates aprovados por token `brn_live_...` com escopo exclusivo `messages:send`, **sem Call ID**. Antiduplicação de 120 segundos, consentimento explícito e mesma cadência do worker. [Guia da URA](docs/IVR_WHATSAPP_API.md).
+
+## Portal de documentação para desenvolvedores
+
+Acesse **`/docs`** (por exemplo `http://localhost:5173/docs`) para navegar pelos endpoints públicos do BR Notify sem login, consultar escopos e exemplos de integração em **cURL, Python e Node.js**. A documentação tem índice lateral por recurso, busca, múltiplos cenários por endpoint e exemplos de respostas. O botão **Documentação** em **API e Integrações** abre o portal. O JSON OpenAPI continua disponível em `/v1/openapi.json` na API. Os exemplos usam dados fictícios e não executam requisições automaticamente.
