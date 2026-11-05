@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import type {SqlRunner} from './time.js';
-import {query,pool} from './db.js';
+import {pool} from './db.js';
 
 export const MIN_TENANT_DELAY_MS=1000;
 export const MAX_TENANT_DELAY_MS=5000;
@@ -96,4 +96,39 @@ export async function deferAfterRateLimit(tenantId:string,waitMs:number){
   }
  });
  return next;
+}
+
+export class DispatchPacingError extends Error{
+ constructor(public waitMs:number){
+  super('Aguarde '+Math.ceil(waitMs/1000)+' segundo(s) antes do próximo teste');
+ }
+}
+/** Reserves a real send while serializing checks/limits with queued sends. */
+export async function reserveDirectSend<T>(
+ tenantId:string,register:(run:SqlRunner)=>Promise<T>
+):Promise<T>{
+ return withDispatchTransaction(async run=>{
+  await run('select pg_advisory_xact_lock(792140,681200)');
+  const scopes=['global','tenant:'+tenantId];
+  for(const scope of scopes){
+   await run('insert into goto_send_pacing(scope) values($1) on conflict do nothing',[scope]);
+  }
+  const rows=await run(
+   'select scope,next_allowed_at from goto_send_pacing where scope=any($1::text[]) order by scope for update',
+   [scopes]
+  );
+  const waitMs=Math.max(0,...rows.rows.map((r:any)=>
+   Math.max(0,new Date(r.next_allowed_at).getTime()-Date.now())||0));
+  if(waitMs>0)throw new DispatchPacingError(waitMs);
+  const value=await register(run);
+  const now=Date.now();
+  for(const [scope,delay] of [
+   ['global',GLOBAL_MIN_DELAY_MS],
+   ['tenant:'+tenantId,randomTenantDelay()]
+  ] as const){
+   await run('update goto_send_pacing set next_allowed_at=$2,updated_at=now() where scope=$1',
+    [scope,new Date(now+delay)]);
+  }
+  return value;
+ });
 }

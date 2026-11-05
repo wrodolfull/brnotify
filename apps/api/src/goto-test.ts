@@ -7,7 +7,8 @@ import {buildTemplatePayload,resolveTemplateMediaId,sendTemplate} from './goto.j
 import {templateFields} from './goto-template.js';
 import {downloadTenantMedia} from './goto-media.js';
 import {phoneE164} from './time.js';
-import {withTransaction,ApiOperationError} from './external-operations.js';
+import {ApiOperationError} from './external-operations.js';
+import {reserveDirectSend} from './send-pacing.js';
 import {env} from './config.js';
 
 export const gotoTestRouter=Router();
@@ -49,7 +50,7 @@ gotoTestRouter.post('/:id/test',wrap(async(req,res)=>{
  const request=buildTemplatePayload(customized,contact,event,record,(await query('select from_touchpoint from goto_connections where tenant_id=$1',[req.tenantId])).rows[0]?.from_touchpoint,file?.filename);
  if(!request.from)throw new ApiOperationError(409,'Configure o remetente WhatsApp deste ambiente');
  const hash=crypto.createHmac('sha256',env.TOKEN_ENCRYPTION_KEY).update(phone).digest('hex');
- const logId=await withTransaction(async run=>{
+ const logId=await reserveDirectSend(req.tenantId!,async run=>{
   await run('select pg_advisory_xact_lock(hashtext($1),7821)',[req.tenantId]);
   const count=await run("select count(*)::int total from goto_test_sends where tenant_id=$1 and created_at>now()-interval '1 hour'",[req.tenantId]);
   if(count.rows[0].total>=5)throw new ApiOperationError(429,'Limite de cinco testes por hora neste ambiente');

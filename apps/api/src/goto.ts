@@ -102,7 +102,9 @@ export async function sendTemplate(tenantId:string,payload:unknown,attachments:M
   });
  }catch(e){throw new ProviderError(0,'Resultado indeterminado: conexão ou timeout com GoTo')}
  if(!response.ok)throw new ProviderError(response.status,'GoTo HTTP '+response.status+': '+(await response.text()).slice(0,350),retryAfterMilliseconds(response.headers.get('retry-after')));
- const value=await response.json() as {id?:string};
+ let value:{id?:string};
+ try{value=await response.json() as {id?:string}}
+ catch{throw new ProviderError(0,'Resposta não JSON após envio. Conciliar antes de tentar novamente')}
  if(!value.id)throw new ProviderError(0,'Resposta da GoTo sem ID. Verificar antes de reenviar');
  return value.id;
 }
