@@ -758,10 +758,11 @@ export function generatedRequest(args:{base:string;token:string;method:string;pa
  }
  if(language==='python')return [
   'import requests',
+  ...(json!==null?['import json']:[]),
   '',
   'url = '+JSON.stringify(endpoint),
-  'headers = {"Authorization": "Bearer '+token+'"}',
-  ...(json!==null?['payload = '+json.replace(/\btrue\b/g,'True').replace(/\bfalse\b/g,'False').replace(/\bnull\b/g,'None')]:[]),
+  'headers = {"Authorization": '+JSON.stringify('Bearer '+token)+'}',
+  ...(json!==null?['payload = json.loads('+JSON.stringify(json)+')']:[]),
   '',
   'response = requests.request('+JSON.stringify(method)+', url, headers=headers'+(json!==null?', json=payload':'')+', timeout=20)',
   'print(response.status_code)',
