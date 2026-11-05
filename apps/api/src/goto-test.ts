@@ -3,12 +3,12 @@ import {Router} from 'express';
 import {z} from 'zod';
 import {query,audit} from './db.js';
 import {authenticate,tenant,activeTenant,wrap} from './auth.js';
-import {buildTemplatePayload,resolveTemplateMediaId,sendTemplate} from './goto.js';
+import {buildTemplatePayload,resolveTemplateMediaId,sendTemplate,ProviderError} from './goto.js';
 import {templateFields} from './goto-template.js';
 import {downloadTenantMedia} from './goto-media.js';
 import {phoneE164} from './time.js';
 import {ApiOperationError} from './external-operations.js';
-import {reserveDirectSend} from './send-pacing.js';
+import {reserveDirectSend,deferAfterRateLimit,retryDelayMilliseconds} from './send-pacing.js';
 import {env} from './config.js';
 
 export const gotoTestRouter=Router();
@@ -60,7 +60,14 @@ gotoTestRouter.post('/:id/test',wrap(async(req,res)=>{
   );
   return created.rows[0].id as string;
  });
- const providerId=await sendTemplate(req.tenantId!,request,file?[file]:[]);
+ let providerId:string;
+ try{providerId=await sendTemplate(req.tenantId!,request,file?[file]:[])}
+ catch(e){
+  if(e instanceof ProviderError&&e.status===429){
+   await deferAfterRateLimit(req.tenantId!,retryDelayMilliseconds(1,e.retryAfterMs));
+  }
+  throw e;
+ }
  await query('update goto_test_sends set provider_message_id=$2 where id=$1',[logId,providerId]);
  await audit(req.tenantId!,req.actor!.id,'goto.template_test_sent',{templateId,requestId:logId});
  res.status(201).json({accepted:true,message_id:providerId,notice:'Mensagem aceita pela GoTo; confirme a entrega pelo WhatsApp ou canal de notificações'});

@@ -13,6 +13,7 @@ import {templateLibraryRouter} from './template-library-routes.js';
 import {ApiOperationError} from './external-operations.js';
 import {WebhookConfigurationError} from './outbound-webhooks.js';
 import {DispatchPacingError} from './send-pacing.js';
+import {ProviderError} from './goto.js';
 import {pool} from './db.js';
 const app=express();
 app.disable('x-powered-by');
@@ -31,6 +32,11 @@ app.use(router);
 app.use((req,res)=>res.status(404).json({error:'Rota não encontrada'}));
 const errorHandler:ErrorRequestHandler=(err,_req,res,_next)=>{
  if(err instanceof DispatchPacingError){res.setHeader('Retry-After',String(Math.ceil(err.waitMs/1000)));return void res.status(429).json({error:err.message})}
+ if(err instanceof ProviderError){
+  const status=err.status===429?429:err.status>=400&&err.status<500?err.status:502;
+  if(status===429)res.setHeader('Retry-After',String(Math.ceil(Math.max(err.retryAfterMs??0,30000)/1000)));
+  return void res.status(status).json({error:err.message});
+ }
  if(err instanceof ApiOperationError)return void res.status(err.code).json({error:err.message});
  if(err instanceof WebhookConfigurationError)return void res.status(422).json({error:err.message});
  if(err?.name==='ZodError')return void res.status(422).json({error:'Dados inválidos',details:err.issues});
