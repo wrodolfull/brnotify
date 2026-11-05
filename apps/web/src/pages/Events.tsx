@@ -17,8 +17,11 @@ export function Events(){
   e.preventDefault();setBusy(true);setError('');const v=formValues(e);
   try{
    const reminder_overrides=overrides?Object.fromEntries(slots.map((slot,i)=>[String(i+1),slot])):null;
-   await api('/api/events',{method:'POST',body:JSON.stringify({contact_id:v.contact_id,record_id:v.record_id||null,title:v.title,event_type:v.event_type,starts_at:v.starts_at,reminder_overrides,confirmation_enabled:v.confirmation_enabled==='on'})});
-   notify('Evento criado e lembretes programados');setModal(false);list.refresh()
+   const result=await api('/api/events',{method:'POST',body:JSON.stringify({contact_id:v.contact_id,record_id:v.record_id||null,title:v.title,event_type:v.event_type,starts_at:v.starts_at,reminder_overrides,confirmation_enabled:v.confirmation_enabled==='on'})});
+   const count=Number(result.reminders_scheduled||0);
+   if(count>0)notify('Evento criado. '+count+' lembrete(s) programado(s).');
+   else notify('Evento criado, mas nenhum lembrete foi programado. Confira horário, antecedência e consentimento.','error');
+   setModal(false);list.refresh()
   }catch(e:any){setError(e.message)}finally{setBusy(false)}
  }
  async function changeStatus(status:'cancelled'|'completed'){

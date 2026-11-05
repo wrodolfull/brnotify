@@ -12,7 +12,7 @@ export function Modal({title,children,onClose}:{title:string;children:ReactNode;
  useEffect(()=>{const f=(e:KeyboardEvent)=>{if(e.key==='Escape')onClose()};window.addEventListener('keydown',f);return()=>window.removeEventListener('keydown',f)},[onClose]);
  return <div className="modal-shade" onClick={onClose}><div className="modal" role="dialog" aria-modal="true" aria-label={title} onClick={e=>e.stopPropagation()}><header className="modal-header"><h2>{title}</h2><button className="icon-button" onClick={onClose} aria-label="Fechar"><X size={19}/></button></header>{children}</div></div>;
 }
-export function Status({value}:{value:string}){return <span className={'status status-'+value}>{({scheduled:'Programado',processing:'Processando',sent:'Enviado',delivered:'Entregue',failed:'Falhou',cancelled:'Cancelado',unknown:'Indeterminado',active:'Ativo',paused:'Pausado',suspended:'Suspenso',APPROVED:'Aprovado'} as Record<string,string>)[value]||value}</span>}
+export function Status({value}:{value:string}){return <span className={'status status-'+value}>{({scheduled:'Programado',processing:'Processando',sent:'Aceito pela GoTo',delivered:'Entregue',failed:'Falhou',cancelled:'Cancelado',unknown:'Indeterminado',active:'Ativo',paused:'Pausado',suspended:'Suspenso',APPROVED:'Aprovado'} as Record<string,string>)[value]||value}</span>}
 export function Empty({title='Nenhum registro',subtitle='Quando houver dados, eles aparecerão aqui.'}:{title?:string;subtitle?:string}){return <div className="empty-state"><Inbox size={30} strokeWidth={1.5}/><strong>{title}</strong><span>{subtitle}</span></div>}
 export function ErrorHint({error}:{error:string}){return error?<div className="inline-error">{error}</div>:null}
 export function useList(path:string,enabled=true){

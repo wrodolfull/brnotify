@@ -43,6 +43,7 @@ export async function processMessages(){
    );
    await run("insert into message_attempts(tenant_id,message_id,outcome,provider_status) values($1,$2,'accepted',201)",[msg.tenant_id,msg.id]);
   });
+  console.info('[worker-dispatch]',JSON.stringify({event:'goto_accepted',messageId:msg.id,tenantId:msg.tenant_id,slot:msg.slot,providerMessageId:providerId}));
  }catch(err){
   const p=err instanceof ProviderError?err:null;
   const retryType=providerId?'unknown':err instanceof StaleReminderError?'cancelled':p?classifyProviderFailure(p.status,msg.attempt_count):'failed';
@@ -68,6 +69,7 @@ export async function processMessages(){
      [msg.tenant_id,msg.id,retryType,detail.slice(0,350),p?.status??null]
     );
    });
+   console.warn('[worker-dispatch]',JSON.stringify({event:'goto_result',messageId:msg.id,tenantId:msg.tenant_id,slot:msg.slot,status:retryType,code}));
   }catch(persistErr){
    // Permanecer em "processing" é deliberado: o watchdog marca UNKNOWN,
    // sem reenvio automático, caso o banco tenha caído depois do envio.
@@ -107,10 +109,11 @@ export async function handleGotoWebhook(event:any){
   const description=String(payload.deliveryStatus?.description||'UNKNOWN');
   const code=String(payload.deliveryStatus?.code||'');
   const status=description==='DELIVERED'?'delivered':code.startsWith('4')||code.startsWith('5')?'failed':'sent';
-  await query(
+  const updated=await query(
    "update scheduled_messages set status=$1,error_code=case when $1='failed' then $2 else null end,error_description=case when $1='failed' then $3 else null end,updated_at=now() where tenant_id=$4 and goto_message_id=$5 and status in ('sent','delivered','failed','unknown') and (status<>'delivered' or $1='delivered') and (status<>'unknown' or $1 in ('delivered','failed'))",
    [status,code,description,tenantId,payload.messageId]
   );
+  console.info('[goto-delivery]',JSON.stringify({tenantId,messageId:payload.messageId,status,code,updatedRows:updated.rowCount||0}));
  }
  await query('update webhook_events set processed_at=now() where event_id=$1',[event.id]);
  return true;

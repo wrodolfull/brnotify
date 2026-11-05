@@ -1,4 +1,5 @@
 import {z} from 'zod';
+import {normalizeWhatsAppPhone} from './whatsapp-phone.js';
 
 type RecordData=Record<string,any>;
 export type WhatsAppTemplate={
@@ -121,7 +122,7 @@ export function buildTemplatePayload(
   });
  }
  return {
-  channel:'WHATSAPP',from,to:[contact.phone],type:'template',
+  channel:'WHATSAPP',from,to:[normalizeWhatsAppPhone(contact.phone)],type:'template',
   attributes:{name:template.name,languageCode:template.language_code},
   ...(components.length?{components}:{})
  };

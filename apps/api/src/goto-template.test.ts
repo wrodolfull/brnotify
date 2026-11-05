@@ -109,3 +109,11 @@ test('repeated parameter names in body and button map to different fields',()=>{
   {type:'buttons',components:[{type:'button',parameters:[{name:'parameter_0',value:'ABC1D23'}]}]}
  ]);
 });
+
+test('buildTemplatePayload uses E.164 and rejects malformed recipient before provider request',()=>{
+ const template={name:'reminder',language_code:'pt_BR',status:'APPROVED',definition:{components:[]},variable_map:{}};
+ const contact={name:'Test',phone:'(19) 99999-9999'};
+ const payload=buildTemplatePayload(template,contact,{},null,'137169456416846');
+ assert.deepEqual(payload.to,['+5519999999999']);
+ assert.throws(()=>buildTemplatePayload(template,{...contact,phone:'+5509999999999'}, {},null,'137169456416846'),/WhatsApp/);
+});

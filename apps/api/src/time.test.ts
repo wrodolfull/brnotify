@@ -27,3 +27,9 @@ test('interpreta data brasileira de planilha',()=>{
  assert.equal(parseImportedDate('15/12/2026'),'2026-12-15');
  assert.throws(()=>parseImportedDate('31/02/2026'));
 });
+
+test('o cadastro rejeita DDI 00 e formato +55 com DDD incompleto',()=>{
+ assert.throws(()=>phoneE164('005519999999999'),/WhatsApp/);
+ assert.throws(()=>phoneE164('+5509999999999'),/WhatsApp/);
+ assert.equal(phoneE164('5519999999999'),'+5519999999999');
+});
