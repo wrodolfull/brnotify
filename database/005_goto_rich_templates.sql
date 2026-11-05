@@ -34,3 +34,17 @@ begin
   $sql$;
  end if;
 end $$;
+
+-- Explicit, per-tenant rate limiting and audit of live template test sends.
+create table if not exists goto_test_sends (
+ id uuid primary key default gen_random_uuid(),
+ tenant_id uuid not null references tenants(id) on delete cascade,
+ template_id uuid references message_templates(id) on delete set null,
+ initiated_by uuid references auth.users(id) on delete set null,
+ recipient_hash char(64) not null,
+ provider_message_id text,
+ created_at timestamptz not null default now()
+);
+create index if not exists goto_test_sends_tenant_recent_idx on goto_test_sends(tenant_id,created_at desc);
+alter table goto_test_sends enable row level security;
+revoke all on table public.goto_test_sends from anon,authenticated;
