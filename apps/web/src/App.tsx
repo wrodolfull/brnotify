@@ -35,7 +35,7 @@ function Workspace({session}:{session:Session}){
  const api=useCallback((path:string,options:RequestInit={},forceTenant?:string)=>callAPI(session,path,forceTenant??tenantId,options),[session,tenantId]);
  const refresh=useCallback(async()=>{
   const me=await callAPI(session,'/api/me','');
-  const list=await callAPI(session,'/api/tenants','');
+  const list=await callAPI(session,'/api/tenant-options','');
   const items=[...(list.items||[])];
   const saved=tenantId||localStorage.getItem('brnotify.tenant')||'';
   if(saved&&!items.some((x:any)=>(x.id||x.tenant_id)===saved)){
