@@ -10,6 +10,7 @@ import {oauthURL,exchangeCode,encrypt,getAccessToken,syncTemplates} from './goto
 import {importHandler,downloadTemplate} from './imports.js';
 import {handleGotoWebhook} from './scheduler.js';
 import {env} from './config.js';
+import {listVisibleTenants,listTenantOptions} from './tenant-list.js';
 
 export const router=Router();
 const upload=multer({storage:multer.memoryStorage(),limits:{fileSize:5*1024*1024,files:1},fileFilter:(_r,f,cb)=>{
@@ -62,11 +63,10 @@ router.get('/api/me',wrap(async(req,res)=>res.json(req.actor)));
 router.get('/api/segments',(_req,res)=>res.json(segments));
 
 router.get('/api/tenants',wrap(async(req,res)=>{
- const p=pageParams(req.query.page);
- if(req.actor!.superAdmin)return res.json({items:req.actor!.memberships,total:req.actor!.memberships.length,page:1,pages:1});
- const result=await query('select * from tenants order by created_at desc limit 20 offset $1',[p.offset]);
- const total=await query('select count(*)::int as total from tenants');
- res.json({items:result.rows,total:total.rows[0].total,page:p.page,pages:Math.ceil(total.rows[0].total/20)});
+ res.json(await listVisibleTenants(req.actor!,req.query.page));
+}));
+router.get('/api/tenant-options',wrap(async(req,res)=>{
+ res.json(await listTenantOptions(req.actor!));
 }));
 router.get('/api/tenants/:id',wrap(async(req,res)=>{
  const id=uuid.parse(req.params.id);
