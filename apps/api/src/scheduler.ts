@@ -1,4 +1,5 @@
 import {DateTime} from 'luxon';
+import {claimNextDueMessage,classifyProviderFailure,retryDelayMilliseconds,deferAfterRateLimit,withDispatchTransaction} from './send-pacing.js';
 import {query} from './db.js';
 import {buildTemplatePayload,resolveTemplateMediaId,ProviderError,sendTemplate} from './goto.js';
 import {downloadTenantMedia} from './goto-media.js';
@@ -6,48 +7,74 @@ import {registerIncomingDecision} from './confirmation.js';
 import {phoneE164} from './time.js';
 
 export async function processMessages(){
- const claimed=await query(
-  "with due as (select m.id from scheduled_messages m join tenants t on t.id=m.tenant_id where m.status='scheduled' and m.scheduled_at<=now() and t.status='active' order by m.scheduled_at asc for update of m skip locked limit 20) update scheduled_messages m set status='processing',locked_at=now(),attempt_count=attempt_count+1,updated_at=now() from due where m.id=due.id returning m.*"
- );
- for(const msg of claimed.rows){
-  let httpStatus:number|null=null;
+ // Uma mensagem por execução. A transação de reserva é curta e distribuída
+ // entre todos os workers, mesmo em VPS diferentes.
+ const msg=await claimNextDueMessage();
+ if(!msg)return 0;
+ let providerId:string|null=null;
+ try{
+  const data=await query(
+   'select m.*,e.title,e.event_type,e.starts_at,e.status as event_status,e.confirmation_status,e.schedule_revision as event_revision,e.details as event_details,t.timezone,c.name,c.phone,c.email,c.consent,c.opted_out_at,c.custom_data,r.details as record_details,mt.name as template_name,mt.language_code,mt.status as template_status,mt.definition,mt.variable_map,g.from_touchpoint from scheduled_messages m join events e on e.id=m.event_id and e.tenant_id=m.tenant_id join tenants t on t.id=m.tenant_id join contacts c on c.id=e.contact_id and c.tenant_id=m.tenant_id left join records r on r.id=e.record_id and r.tenant_id=m.tenant_id left join message_templates mt on mt.id=m.template_id and mt.tenant_id=m.tenant_id left join goto_connections g on g.tenant_id=m.tenant_id where m.id=$1',
+   [msg.id]
+  );
+  const v=data.rows[0];
+  if(!v)throw new Error('Evento inexistente');
+  if(v.event_status!=='scheduled'||v.event_revision!==msg.schedule_revision||
+    ['reschedule_requested','declined'].includes(v.confirmation_status)||
+    !v.consent||v.opted_out_at)
+   throw new Error('Evento alterado, cancelado ou contato sem consentimento');
+  if(!v.template_id||!v.definition||!v.from_touchpoint)
+   throw new Error('Configure um template aprovado e remetente GoTo para este lembrete');
+  if(DateTime.fromJSDate(new Date(v.starts_at)).toMillis()<=Date.now())
+   throw new Error('Data do evento já passou');
+  const template={name:v.template_name,language_code:v.language_code,status:v.template_status,definition:v.definition,variable_map:v.variable_map};
+  const contact={name:v.name,phone:v.phone,email:v.email,custom_data:v.custom_data};
+  const event={title:v.title,event_type:v.event_type,starts_at:v.starts_at,timezone:v.timezone,details:v.event_details};
+  const record={details:v.record_details};
+  const required=resolveTemplateMediaId(template,{contact,event,record});
+  const attachment=required?await downloadTenantMedia(msg.tenant_id,required.assetId,required.kind):null;
+  const payload=buildTemplatePayload(template,contact,event,record,v.from_touchpoint,attachment?.filename);
+  providerId=await sendTemplate(msg.tenant_id,payload,attachment?[attachment]:[]);
+  await withDispatchTransaction(async run=>{
+   await run(
+    "update scheduled_messages set status='sent',goto_message_id=$2,sent_at=now(),error_code=null,error_description=null,locked_at=null,updated_at=now() where id=$1 and status='processing'",
+    [msg.id,providerId]
+   );
+   await run("insert into message_attempts(tenant_id,message_id,outcome,provider_status) values($1,$2,'accepted',201)",[msg.tenant_id,msg.id]);
+  });
+ }catch(err){
+  const p=err instanceof ProviderError?err:null;
+  const retryType=providerId?'unknown':p?classifyProviderFailure(p.status,msg.attempt_count):'failed';
+  const code=providerId?'PERSISTENCE':p?String(p.status||'UNKNOWN'):'VALIDATION';
+  const detail=providerId?'A GoTo aceitou o envio mas a persistência falhou: conciliar manualmente':
+   (err instanceof Error?err.message:'Falha desconhecida');
+  const retryDelay=p?.status===429?retryDelayMilliseconds(msg.attempt_count,p.retryAfterMs):0;
+  if(p?.status===429){
+   try{await deferAfterRateLimit(msg.tenant_id,retryDelay)}catch(e){
+    console.error('[goto-429] Falha ao aplicar cooldown:',e instanceof Error?e.message:'erro');
+   }
+  }
+  // Nunca altera a data ORIGINAL do agendamento; só a disponibilidade para retry.
   try{
-   const data=await query(
-    'select m.*,e.title,e.event_type,e.starts_at,e.status as event_status,e.confirmation_status,e.schedule_revision as event_revision,e.details as event_details,t.timezone,c.name,c.phone,c.email,c.consent,c.opted_out_at,c.custom_data,r.details as record_details,mt.name as template_name,mt.language_code,mt.status as template_status,mt.definition,mt.variable_map,g.from_touchpoint from scheduled_messages m join events e on e.id=m.event_id and e.tenant_id=m.tenant_id join tenants t on t.id=m.tenant_id join contacts c on c.id=e.contact_id and c.tenant_id=m.tenant_id left join records r on r.id=e.record_id and r.tenant_id=m.tenant_id left join message_templates mt on mt.id=m.template_id and mt.tenant_id=m.tenant_id left join goto_connections g on g.tenant_id=m.tenant_id where m.id=$1',
-    [msg.id]
-   );
-   const v=data.rows[0];
-   if(!v)throw new Error('Evento inexistente');
-   if(v.event_status!=='scheduled'||v.event_revision!==msg.schedule_revision||['reschedule_requested','declined'].includes(v.confirmation_status)||!v.consent||v.opted_out_at)throw new Error('Evento alterado, cancelado ou contato sem consentimento');
-   if(!v.template_id||!v.definition||!v.from_touchpoint)throw new Error('Configure um template aprovado e remetente GoTo para este lembrete');
-   if(DateTime.fromJSDate(new Date(v.starts_at)).toMillis()<=Date.now())throw new Error('Data do evento já passou');
-   const template={name:v.template_name,language_code:v.language_code,status:v.template_status,definition:v.definition,variable_map:v.variable_map};
-   const contact={name:v.name,phone:v.phone,email:v.email,custom_data:v.custom_data};
-   const event={title:v.title,event_type:v.event_type,starts_at:v.starts_at,timezone:v.timezone,details:v.event_details};
-   const record={details:v.record_details};
-   const required=resolveTemplateMediaId(template,{contact,event,record});
-   const attachment=required?await downloadTenantMedia(msg.tenant_id,required.assetId,required.kind):null;
-   const payload=buildTemplatePayload(template,contact,event,record,v.from_touchpoint,attachment?.filename);
-   const providerId=await sendTemplate(msg.tenant_id,payload,attachment?[attachment]:[]);
-   await query("update scheduled_messages set status='sent',goto_message_id=$2,sent_at=now(),locked_at=null,updated_at=now() where id=$1",[msg.id,providerId]);
-   await query("insert into message_attempts(tenant_id,message_id,outcome,provider_status) values($1,$2,'accepted',201)",[msg.tenant_id,msg.id]);
-  }catch(err){
-   const p=err instanceof ProviderError?err:null;
-   httpStatus=p?.status??null;
-   const detail=err instanceof Error?err.message:'Erro desconhecido';
-   const unknown=httpStatus===0;
-   const retryable=p&&[429,500,502,503,504].includes(p.status);
-   const retry=Boolean(retryable&&msg.attempt_count<3);
-   const status=unknown?'unknown':retry?'scheduled':'failed';
-   const delay=DateTime.now().plus({minutes:Math.min(30,Math.pow(3,msg.attempt_count))}).toISO();
-   await query(
-    "update scheduled_messages set status=$2,error_code=$3,error_description=$4,scheduled_at=case when $5 then $6::timestamptz else scheduled_at end,locked_at=null,updated_at=now() where id=$1",
-    [msg.id,status,httpStatus?String(httpStatus):'VALIDATION',detail,retry,delay]
-   );
-   await query('insert into message_attempts(tenant_id,message_id,outcome,error_detail,provider_status) values($1,$2,$3,$4,$5)',[msg.tenant_id,msg.id,status,detail,httpStatus]);
+   await withDispatchTransaction(async run=>{
+    await run(
+     "update scheduled_messages set status=$2,error_code=$3,error_description=$4,next_attempt_at=case when $2='scheduled' then $5::timestamptz else next_attempt_at end,locked_at=null,updated_at=now() where id=$1 and status='processing'",
+     [msg.id,retryType==='retry'?'scheduled':retryType,code,detail.slice(0,350),
+      new Date(Date.now()+retryDelay)]
+    );
+    await run(
+     'insert into message_attempts(tenant_id,message_id,outcome,error_detail,provider_status) values($1,$2,$3,$4,$5)',
+     [msg.tenant_id,msg.id,retryType,detail.slice(0,350),p?.status??null]
+    );
+   });
+  }catch(persistErr){
+   // Permanecer em "processing" é deliberado: o watchdog marca UNKNOWN,
+   // sem reenvio automático, caso o banco tenha caído depois do envio.
+   console.error('[goto-persist]',persistErr instanceof Error?persistErr.message:'erro');
+   throw persistErr;
   }
  }
- return claimed.rowCount||0;
+ return 1;
 }
 export async function handleGotoWebhook(event:any){
  if(!event||typeof event.id!=='string'||event.source!=='inbox-notification'||typeof event.content?.accountKey!=='string')throw new Error('Evento GoTo inválido');
