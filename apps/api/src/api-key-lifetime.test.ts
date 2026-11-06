@@ -1,6 +1,10 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {apiKeyCreationSchema} from './api-key-lifetime.js';
+process.env.DATABASE_URL||='postgresql://unused:unused@127.0.0.1:5432/postgres';
+process.env.SUPABASE_URL||='https://example.supabase.co';
+process.env.SUPABASE_SERVICE_ROLE_KEY||='placeholder';
+process.env.TOKEN_ENCRYPTION_KEY||='0'.repeat(64);
+const {apiKeyCreationSchema}=await import('./api-key-lifetime.js');
 
 test('URA-only key can explicitly never expire',()=>{
  const result=apiKeyCreationSchema.parse({label:'URA GoTo',scopes:['messages:send'],expires_in_days:null});
