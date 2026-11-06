@@ -63,6 +63,7 @@ export function ApiIntegrations(){
  const [create,setCreate]=useState<'key'|'webhook'|null>(null);
  const [secret,setSecret]=useState<{label:string;token:string}|null>(null);
  const [scopes,setScopes]=useState<string[]>(['contacts:read','contacts:write','events:read','events:write']);
+ const [isUraKey,setIsUraKey]=useState(false),[neverExpires,setNeverExpires]=useState(false);
  const [events,setEvents]=useState<string[]>(['reminder.sent','reminder.delivered','reminder.failed']);
  const [busy,setBusy]=useState(false),[error,setError]=useState('');
  const [health,setHealth]=useState<any>(null);
@@ -85,10 +86,13 @@ export function ApiIntegrations(){
  async function createKey(e:FormEvent<HTMLFormElement>){
   e.preventDefault();
   if(!scopes.length){setError('Selecione ao menos uma permissão');return}
+  if(neverExpires&&(scopes.length!==1||scopes[0]!=='messages:send')){
+   setError('A opção Nunca expira exige somente a permissão messages:send.');return;
+  }
   const v=formValues(e);setBusy(true);setError('');
   try{
    const result=await api('/api/integrations/keys',{method:'POST',body:JSON.stringify({
-    label:v.label,scopes,expires_in_days:Number(v.expires_in_days||90)
+    label:v.label,scopes,expires_in_days:neverExpires?null:Number(v.expires_in_days||90)
    })});
    setCreate(null);keys.refresh();setSecret({label:v.label,token:result.token});notify('Chave criada');
   }catch(e:any){setError(e.message)}finally{setBusy(false)}
@@ -128,14 +132,14 @@ export function ApiIntegrations(){
   {tab==='keys'&&<Card>
    <div className="card-heading"><div><h2>Credenciais de integração</h2><p>Crie uma chave por sistema e limite suas permissões.</p></div>
     <div className="button-row">
-     <Button secondary onClick={()=>{setError('');setScopes(['messages:send']);setCreate('key')}}>Token para URA</Button>
-     <Button onClick={()=>{setError('');setCreate('key')}}><Plus size={16}/> Nova chave</Button>
+     <Button secondary onClick={()=>{setError('');setScopes(['messages:send']);setIsUraKey(true);setNeverExpires(false);setCreate('key')}}>Token para URA</Button>
+     <Button onClick={()=>{setError('');setIsUraKey(false);setNeverExpires(false);setScopes(['contacts:read','contacts:write','events:read','events:write']);setCreate('key')}}><Plus size={16}/> Nova chave</Button>
     </div></div>
     <p className="hint">Para uma URA GoTo, crie um token com apenas <code>messages:send</code>. Utilize-o no cabeçalho Authorization: Bearer, nunca na URL. A chamada HTTP é POST /v1/messages/send e não exige Call ID.</p>
    {keys.data.items.length?<div className="data-list">{keys.data.items.map((key:any)=><div className="data-row static-row" key={key.id}>
     <span className="event-icon"><KeyRound size={19}/></span>
     <span className="row-main"><strong>{key.label}</strong><small><code>{key.token_prefix}••••••</code> · {key.scopes.length} permissões · último uso {key.last_used_at?fmtDate(key.last_used_at,true):'nunca'}</small></span>
-    <span className="integration-meta"><small>Expira {fmtDate(key.expires_at)}</small>{key.revoked_at?<span className="status status-failed">Revogada</span>:new Date(key.expires_at)<new Date()?<span className="status status-paused">Expirada</span>:<span className="status status-active">Ativa</span>}</span>
+    <span className="integration-meta"><small>{key.expires_at?'Expira '+fmtDate(key.expires_at):'Nunca expira'}</small>{key.revoked_at?<span className="status status-failed">Revogada</span>:key.expires_at&&new Date(key.expires_at)<new Date()?<span className="status status-paused">Expirada</span>:<span className="status status-active">Ativa</span>}</span>
     {!key.revoked_at&&<button title="Revogar chave" className="icon-button" disabled={busy} onClick={()=>{
      if(window.confirm('Revogar esta chave imediatamente?'))void act(async()=>{
       await api('/api/integrations/keys/'+key.id,{method:'DELETE'});keys.refresh();
@@ -204,9 +208,13 @@ export function ApiIntegrations(){
   {create==='key'&&<Modal title="Criar chave de API" onClose={()=>setCreate(null)}>
    <form className="form-stack" onSubmit={createKey}>
     <label className="field"><span>Nome da integração</span><input name="label" required minLength={2} maxLength={80} placeholder="Ex.: CRM da concessionária"/></label>
-    <label className="field"><span>Prazo da chave</span><select name="expires_in_days" defaultValue="90"><option value="30">30 dias</option><option value="90">90 dias</option><option value="180">180 dias</option><option value="365">365 dias</option></select></label>
+    <label className="field"><span>Prazo da chave</span><select name="expires_in_days" defaultValue="90" disabled={neverExpires}><option value="30">30 dias</option><option value="90">90 dias</option><option value="180">180 dias</option><option value="365">365 dias</option></select></label>
+    {isUraKey&&<div className="form-panel">
+     <label className="checkbox-row"><input type="checkbox" checked={neverExpires} onChange={e=>setNeverExpires(e.target.checked)}/> Nunca expira</label>
+     <p className="muted">Disponível somente para URA com a permissão messages:send. O token continuará ativo até ser revogado manualmente. Guarde a chave em local seguro.</p>
+    </div>}
     <div className="integration-choices-label">Permissões concedidas</div>
-    <div className="integration-choices">{SCOPES.map(([value,label])=><label key={value} className="integration-choice"><input type="checkbox" checked={scopes.includes(value)} onChange={()=>toggle(value,scopes,setScopes)}/><span><strong>{label}</strong><code>{value}</code></span></label>)}</div>
+    <div className="integration-choices">{SCOPES.map(([value,label])=><label key={value} className="integration-choice"><input type="checkbox" checked={scopes.includes(value)} disabled={neverExpires&&value!=='messages:send'} onChange={()=>toggle(value,scopes,setScopes)}/><span><strong>{label}</strong><code>{value}</code></span></label>)}</div>
     <ErrorHint error={error}/>
     <div className="form-footer"><Button secondary onClick={()=>setCreate(null)}>Cancelar</Button><Button type="submit" disabled={busy}>Criar chave</Button></div>
    </form>

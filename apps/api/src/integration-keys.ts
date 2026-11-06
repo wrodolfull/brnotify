@@ -40,7 +40,7 @@ export const authenticateApiKey=wrap(async(req,res,next)=>{
  // O formato e tamanho são estritos; a chave nunca é gravada nos logs.
  if(!/^brn_live_[a-f0-9]{64}$/.test(raw))return res.status(401).json({error:'Chave de API ausente ou inválida'});
  const found=await query(
-  "select k.id,k.tenant_id,k.label,k.scopes from integration_api_keys k join tenants t on t.id=k.tenant_id where k.token_hash=$1 and k.revoked_at is null and k.expires_at>now() and t.status='active'",
+  "select k.id,k.tenant_id,k.label,k.scopes from integration_api_keys k join tenants t on t.id=k.tenant_id where k.token_hash=$1 and k.revoked_at is null and (k.expires_at is null or k.expires_at>now()) and t.status='active'",
   [hashApiKey(raw)]
  );
  if(!found.rowCount)return res.status(401).json({error:'Chave expirada, revogada ou ambiente indisponível'});
