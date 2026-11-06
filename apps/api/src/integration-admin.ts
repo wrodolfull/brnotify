@@ -3,7 +3,8 @@ import crypto from 'node:crypto';
 import {z} from 'zod';
 import {query,audit,pageParams} from './db.js';
 import {authenticate,tenant,activeTenant,wrap} from './auth.js';
-import {API_SCOPES,generateApiKey,scopesSchema} from './integration-keys.js';
+import {API_SCOPES,generateApiKey} from './integration-keys.js';
+import {apiKeyCreationSchema} from './api-key-lifetime.js';
 import {encrypt} from './goto.js';
 import {assertSafeWebhookUrl,WEBHOOK_EVENT_TYPES} from './outbound-webhooks.js';
 
@@ -14,7 +15,7 @@ const uuid=z.string().uuid();
 integrationAdminRouter.get('/health',wrap(async(req,res)=>{
  const tenantId=req.tenantId!;
  const [keys,dead,ambiguous,connection]=await Promise.all([
-  query('select count(*)::int n from integration_api_keys where tenant_id=$1 and revoked_at is null and expires_at>now()',[tenantId]),
+  query('select count(*)::int n from integration_api_keys where tenant_id=$1 and revoked_at is null and (expires_at is null or (expires_at is null or expires_at>now()))',[tenantId]),
   query("select count(*)::int n from outbound_webhook_deliveries where tenant_id=$1 and status='dead' and created_at>now()-interval '30 days'",[tenantId]),
   query("select count(*)::int n from inbound_interactions where tenant_id=$1 and resolution='ambiguous' and received_at>now()-interval '30 days'",[tenantId]),
   query('select account_key,from_touchpoint,notification_subscription_id from goto_connections where tenant_id=$1',[tenantId])
@@ -41,19 +42,15 @@ integrationAdminRouter.get('/keys',wrap(async(req,res)=>{
  res.json({items:items.rows,page:p.page,total:total.rows[0].total,pages:Math.ceil(total.rows[0].total/20),available_scopes:API_SCOPES});
 }));
 integrationAdminRouter.post('/keys',wrap(async(req,res)=>{
- const v=z.object({
-  label:z.string().trim().min(2).max(80),
-  scopes:scopesSchema,
-  expires_in_days:z.number().int().min(1).max(365).default(90)
- }).parse(req.body);
+ const v=apiKeyCreationSchema.parse(req.body);
  const count=await query("select count(*)::int total from integration_api_keys where tenant_id=$1 and revoked_at is null and expires_at>now()",[req.tenantId]);
  if(count.rows[0].total>=10)return res.status(409).json({error:'Máximo de 10 chaves ativas por ambiente'});
  const created=generateApiKey();
  const inserted=await query(
-  "insert into integration_api_keys(tenant_id,label,token_prefix,token_hash,scopes,expires_at,created_by) values($1,$2,$3,$4,$5,now()+($6::int*interval '1 day'),$7) returning id,label,token_prefix,scopes,expires_at,created_at",
+  "insert into integration_api_keys(tenant_id,label,token_prefix,token_hash,scopes,expires_at,created_by) values($1,$2,$3,$4,$5,case when $6::int is null then null else now()+($6::int*interval '1 day') end,$7) returning id,label,token_prefix,scopes,expires_at,created_at",
   [req.tenantId,v.label,created.prefix,created.hash,v.scopes,v.expires_in_days,req.actor!.id]
  );
- await audit(req.tenantId!,req.actor!.id,'integration.key_created',{id:inserted.rows[0].id,scopes:v.scopes});
+ await audit(req.tenantId!,req.actor!.id,'integration.key_created',{id:inserted.rows[0].id,scopes:v.scopes,expires:inserted.rows[0].expires_at?'dated':'never'});
  res.status(201).json({...inserted.rows[0],token:created.token});
 }));
 integrationAdminRouter.delete('/keys/:id',wrap(async(req,res)=>{
