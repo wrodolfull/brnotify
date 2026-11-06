@@ -4,7 +4,7 @@ import {z} from 'zod';
 import {query,audit,pageParams} from './db.js';
 import {authenticate,tenant,activeTenant,wrap} from './auth.js';
 import {API_SCOPES,generateApiKey} from './integration-keys.js';
-import {apiKeyCreationSchema,validApiKeyExpiryPredicate} from './api-key-lifetime.js';
+import {apiKeyCreationSchema} from './api-key-lifetime.js';
 import {encrypt} from './goto.js';
 import {assertSafeWebhookUrl,WEBHOOK_EVENT_TYPES} from './outbound-webhooks.js';
 

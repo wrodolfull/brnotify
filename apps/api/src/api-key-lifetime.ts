@@ -17,4 +17,3 @@ export const apiKeyCreationSchema=z.object({
  }
 });
 
-export const validApiKeyExpiryPredicate="(k.expires_at is null or k.expires_at>now())";
