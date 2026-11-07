@@ -75,7 +75,7 @@ try{
  );
  assert.equal(delivery.rows[0].status,'queued');
  assert.equal(delivery.rows[0].event_type,'automation.triggered');
- const template=(await query("select id from message_templates where tenant_id=$1 and status='APPROVED' limit 1",[tenant])).rows[0]?.id;
+ const template=(await query("select id from message_templates where tenant_id=$1 and status='APPROVED' and name='continuar_whatsapp' limit 1",[tenant])).rows[0]?.id;
  assert.ok(template);
  const whatsapp=await createFlow(tenant,{
   ...base,title:'Resposta por template',match_mode:'any',match_text:null,
