@@ -65,7 +65,7 @@ export function WorkflowAutomations(){
  const template=options.templates.find(x=>x.id===form.template_id);
  const templateFields=useMemo(()=>fieldsFor(template),[template]);
  const isWhatsapp=form.trigger_type==='message.received';
- const update=<K extends keyof Form>(key:K,value:Form[K])=>setForm(v=>({...v,[key]:value}));
+ const update=<K extends keyof Form,>(key:K,value:Form[K])=>setForm(v=>({...v,[key]:value}));
  function edit(flow?:any){
   setSelected(flow||null);
   setForm(flow?fromSaved(flow):{...blank,template_variables:{}});
