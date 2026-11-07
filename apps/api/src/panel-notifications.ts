@@ -37,7 +37,7 @@ async function prepare(tenantId:string,raw:unknown){
   to:contact.phone,name:contact.name,template:template.name,language:template.language_code,
   variables:data.variables,consent:{confirmed:true,source:'explicit_customer_request'}
  });
- let prepared;
+ let prepared:ReturnType<typeof prepareOnDemandTemplate>;
  try{prepared=prepareOnDemandTemplate(template,input)}
  catch(e){throw new ApiOperationError(422,e instanceof Error?e.message:'Modelo inválido')}
  const mediaId=prepared.media?.assetId||null;
@@ -110,7 +110,7 @@ async function parseSheet(file:Express.Multer.File){
  const sheet=book.worksheets[0];
  if(!sheet)throw new ApiOperationError(422,'A planilha não possui dados.');
  const cols=new Map<string,number>();
- sheet.getRow(1).eachCell((c,i)=>cols.set(cell(c.value).toLowerCase(),i));
+ sheet.getRow(1).eachCell((c,i)=>cols.set(cell(c.value),i));
  if(!cols.has('whatsapp'))throw new ApiOperationError(422,'A planilha precisa ter uma coluna whatsapp.');
  if(sheet.rowCount>252)throw new ApiOperationError(422,'Limite de 250 linhas por envio. Divida a planilha.');
  return Array.from({length:Math.max(0,sheet.rowCount-1)},(_,i)=>{
@@ -128,7 +128,6 @@ export async function panelBatch(req:Request,res:Response,preview:boolean){
  const templateId=uuid.parse(req.body.template_id);
  const rows=await parseSheet(req.file);
  if(!rows.length)throw new ApiOperationError(422,'Planilha sem linhas para enviar.');
- const zone=await query('select timezone from tenants where id=$1',[req.tenantId]);
  const failures:{row:number;error:string}[]=[];
  const items:Array<{line:number;data:PanelInput;phone:string;scheduled_at:string|null}>=[];
  for(const row of rows){
