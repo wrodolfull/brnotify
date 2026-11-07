@@ -41,3 +41,12 @@ test('normalizes received WhatsApp without storing raw provider envelopes',()=>{
  assert.equal(event?.metadata.text,'Confirmo');
  assert.equal(event?.metadata.phone,'+5511999999999');
 });
+
+test('REPORT_SUMMARY_REVISION nanosecond timestamp produces a stable event key',()=>{
+ const input={data:{source:'call-events-report',type:'REPORT_SUMMARY_REVISION',
+  timestamp:'2026-11-07T14:51:30.993967226Z',content:{conversationSpaceId:metadata.conversationSpaceId}}};
+ const a=normalizeGotoEvent(input);
+ const b=normalizeGotoEvent(input);
+ assert.equal(a?.externalKey,b?.externalKey);
+ assert.match(a?.externalKey||'',/2026-11-07T14:51:30[.]993Z/);
+});
