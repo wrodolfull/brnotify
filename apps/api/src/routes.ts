@@ -14,7 +14,7 @@ import {handleGotoWebhook} from './scheduler.js';
 import {createFlow,updateFlow,setFlowStatus,listFlows,listRuns} from './automation-store.js';
 import {normalizeGotoEvent} from './goto-event-normalizer.js';
 import {recordGotoEvent,listGoToEvents,listGoToCalls} from './goto-event-store.js';
-import {activateCallMonitoring,callMonitorStatus} from './goto-call-integration.js';
+import {activateCallMonitoring,callMonitorStatus,enableCallIntelligence} from './goto-call-integration.js';
 import {env} from './config.js';
 import {listVisibleTenants,listTenantOptions} from './tenant-list.js';
 import {loadDashboardTrend} from './dashboard-trend.js';
@@ -393,11 +393,16 @@ router.post('/api/goto/calls/activate',tenant(true),activeTenant,wrap(async(req,
  await audit(req.tenantId!,req.actor!.id,'goto.call_monitoring_activated',{already_active:result.already_active});
  res.status(result.already_active?200:201).json(result);
 }));
+router.post('/api/goto/calls/intelligence/activate',tenant(true),activeTenant,wrap(async(req,res)=>{
+ const status=await enableCallIntelligence(req.tenantId!);
+ await audit(req.tenantId!,req.actor!.id,'goto.call_intelligence_activated',{already_active:status.already_active});
+ res.status(status.already_active?200:201).json(status);
+}));
 router.get('/api/goto/calls',tenant(),wrap(async(req,res)=>{
  res.json(await listGoToCalls(req.tenantId!,req.query.page));
 }));
 router.get('/api/goto/events',tenant(),wrap(async(req,res)=>{
- const kind=z.enum(['all','call','message']).default('all').parse(req.query.kind);
+ const kind=z.enum(['all','call','message','intelligence']).default('all').parse(req.query.kind);
  res.json(await listGoToEvents(req.tenantId!,req.query.page,kind));
 }));
 router.post('/api/goto/notifications/subscribe',tenant(true),activeTenant,wrap(async(req,res)=>{
