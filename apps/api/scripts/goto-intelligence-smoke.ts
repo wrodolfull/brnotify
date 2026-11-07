@@ -67,6 +67,29 @@ try{
  assert.ok(!JSON.stringify(events).includes('PRIVATE-DO-NOT-STORE'));
  const other=await listGoToEvents('00000000-0000-4000-8000-000000000000',1,'intelligence');
  assert.equal(other.total,0);
+ const endpoint=await query(
+  "select id from outbound_webhook_endpoints where tenant_id=$1 and active=true limit 1",[tenant]
+ );
+ assert.ok(endpoint.rowCount);
+ const crmFlow=await createFlow(tenant,{
+  ...base,title:'Enviar insight ao CRM',match_mode:'any',match_text:null,
+  action_type:'webhook',action_label:'Notificar CRM',endpoint_id:endpoint.rows[0].id
+ });
+ await setFlowStatus(tenant,crmFlow.id,'active');
+ const commercial=extractGotoReportSignals(intelligence(
+  'call-ai-webhook','AI_INSIGHT_SALE_CLOSE_DETECTED','trans-webhook'
+ ))[0];
+ await recordGotoEvent(tenant,commercial.event,account);
+ await scanAutomationEvents();
+ for(let i=0;i<5;i++)if(!(await processAutomationRun()))break;
+ const webhook=await query(
+  `select d.payload,d.status from outbound_webhook_deliveries d
+   join automation_runs r on d.event_id=r.id
+   where r.tenant_id=$1 and r.flow_id=$2`,[tenant,crmFlow.id]
+ );
+ assert.equal(webhook.rowCount,1);
+ assert.equal(webhook.rows[0].status,'queued');
+ assert.equal(webhook.rows[0].payload.data.signal_code,'AI_INSIGHT_SALE_CLOSE_DETECTED');
  const original=await query(
   "insert into goto_call_conversations(tenant_id,conversation_space_id,report_status) values($1,'test-revision-report','complete') returning id",
   [tenant]
