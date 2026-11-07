@@ -79,6 +79,7 @@ router.post('/api/webhooks/goto-calls/:tenantId/:secret',wrap(async(req,res)=>{
  if(!monitor.rows[0].call_scopes_granted)return res.status(204).end();
  // GoTo sends an empty request during notification channel provisioning.
  if(!req.body||typeof req.body!=='object'||!Object.keys(req.body).length)return res.status(204).end();
+ if(!monitor.rows[0].enabled)return res.status(204).end();
  const event=normalizeGotoEvent(req.body);
  if(!event||!['call-events','call-events-report'].includes(event.source))
   return res.status(204).end();
