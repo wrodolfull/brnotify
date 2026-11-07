@@ -11,6 +11,7 @@ import {oauthURL,exchangeCode,encrypt,getAccessToken,syncTemplates} from './goto
 import {importHandler,downloadTemplate} from './imports.js';
 import {enqueuePanelNotification,panelBatch,panelHistory} from './panel-notifications.js';
 import {handleGotoWebhook} from './scheduler.js';
+import {createFlow,updateFlow,setFlowStatus,listFlows,listRuns} from './automation-store.js';
 import {normalizeGotoEvent} from './goto-event-normalizer.js';
 import {recordGotoEvent,listGoToEvents,listGoToCalls} from './goto-event-store.js';
 import {activateCallMonitoring,callMonitorStatus} from './goto-call-integration.js';
@@ -418,6 +419,37 @@ router.post('/api/goto/templates/sync',tenant(true),activeTenant,wrap(async(req,
  res.json({count});
 }));
 // Simple panel notifications do not create appointments/events.
+// Automation workflows are distinct from legacy appointment reminder rules.
+router.get('/api/automation-flows',tenant(),wrap(async(req,res)=>{
+ res.json(await listFlows(req.tenantId!,req.query.page));
+}));
+router.post('/api/automation-flows',tenant(true),activeTenant,wrap(async(req,res)=>{
+ const flow=await createFlow(req.tenantId!,req.body);
+ await audit(req.tenantId!,req.actor!.id,'automation.created',{id:flow.id});
+ res.status(201).json(flow);
+}));
+router.put('/api/automation-flows/:id',tenant(true),activeTenant,wrap(async(req,res)=>{
+ const flow=await updateFlow(req.tenantId!,req.params.id,req.body);
+ await audit(req.tenantId!,req.actor!.id,'automation.updated',{id:flow.id});
+ res.json(flow);
+}));
+router.post('/api/automation-flows/:id/status',tenant(true),activeTenant,wrap(async(req,res)=>{
+ const status=z.enum(['active','paused']).parse(req.body?.status);
+ const flow=await setFlowStatus(req.tenantId!,req.params.id,status);
+ await audit(req.tenantId!,req.actor!.id,'automation.status_changed',{id:flow.id,status});
+ res.json(flow);
+}));
+router.get('/api/automation-runs',tenant(),wrap(async(req,res)=>{
+ res.json(await listRuns(req.tenantId!,req.query.page,req.query.flow_id?String(req.query.flow_id):null));
+}));
+router.get('/api/automation-options',tenant(),wrap(async(req,res)=>{
+ const [templates,endpoints]=await Promise.all([
+  query("select id,name,language_code,definition from message_templates where tenant_id=$1 and status='APPROVED' order by name limit 100",[req.tenantId]),
+  query('select id,label,destination_url from outbound_webhook_endpoints where tenant_id=$1 and active=true order by label limit 20',[req.tenantId])
+ ]);
+ res.json({templates:templates.rows,endpoints:endpoints.rows});
+}));
+
 router.get('/api/notifications/templates',tenant(),wrap(async(req,res)=>{
  const items=await query("select id,name,language_code,definition,variable_map from message_templates where tenant_id=$1 and status='APPROVED' order by name,language_code limit 200",[req.tenantId]);
  res.json({items:items.rows});
