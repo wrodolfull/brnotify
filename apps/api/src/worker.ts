@@ -3,6 +3,7 @@ import {processMessages} from './scheduler.js';
 import {processOnDemandMessages,cleanupOnDemandMessages} from './on-demand-worker.js';
 import {expireStaleScheduledMessages} from './send-pacing.js';
 import {rebuildEvent} from './time.js';
+import {processCallReportQueue,reclaimCallReportQueue} from './goto-call-report-worker.js';
 import {processOutboundWebhooks,reclaimOutboundAfterCrash} from './outbound-webhooks.js';
 
 let running=true;
@@ -28,6 +29,8 @@ async function maintenanceLoop(){
    await cleanupOnDemandMessages();
    await rebuildRules();
    await reclaimOutboundAfterCrash();
+   await reclaimCallReportQueue();
+   await processCallReportQueue();
    await processOutboundWebhooks();
   }catch(e){
    console.error('[worker-maintenance]',e instanceof Error?e.message:'erro');
