@@ -1,5 +1,7 @@
 -- Etapa 1: camada de eventos da GoTo, isolada dos compromissos existentes.
 -- Rodar depois de database/010_panel_notifications.sql.
+alter table public.oauth_states add column if not exists request_call_scopes boolean not null default false;
+alter table public.goto_connections add column if not exists call_scopes_granted boolean not null default false;
 create table if not exists public.goto_call_monitors (
  tenant_id uuid primary key references public.tenants(id) on delete cascade,
  webhook_secret_hash char(64) not null,
