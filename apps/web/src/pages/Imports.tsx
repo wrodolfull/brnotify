@@ -16,8 +16,8 @@ export function Imports(){
    if(dry){setPreview(data);setResult(null)}else{setResult(data);setPreview(null);history.refresh();notify('Importação finalizada')}
   }catch(e:any){setError(e.message)}finally{setBusy(false)}
  }
- return <><PageTitle eyebrow="DADOS" title="Importar contatos" subtitle="Carregue seus contatos e agendamentos em poucos passos." action={<Button secondary onClick={download}><Download size={17}/> Baixar modelo Excel</Button>}/>
- <div className="import-grid"><Card><div className="card-heading"><div><h2>Importação em lote</h2><p>Use o cabeçalho do modelo para evitar erros.</p></div><FileSpreadsheet size={23}/></div>
+ return <><PageTitle eyebrow="COMPROMISSOS" title="Importar compromissos" subtitle="Carregue contatos e seus compromissos com data marcada. Para envios avulsos, use Notificações." action={<Button secondary onClick={download}><Download size={17}/> Baixar modelo Excel</Button>}/>
+ <div className="import-grid"><Card><div className="card-heading"><div><h2>Planilha de compromissos</h2><p>Use o cabeçalho do modelo para evitar erros.</p></div><FileSpreadsheet size={23}/></div>
  {canEdit?<><label className="upload-zone"><UploadCloud size={36} strokeWidth={1.4}/><strong>{file?file.name:'Selecione sua planilha'}</strong><span>Arquivo XLSX ou CSV, até 5 MB e 1.000 linhas por importação.</span><input type="file" accept=".xlsx,.csv" onChange={(e:ChangeEvent<HTMLInputElement>)=>{setFile(e.target.files?.[0]||null);setPreview(null);setResult(null)}}/></label><ErrorHint error={error}/><div className="button-row"><Button secondary disabled={!file||busy} onClick={()=>send(true)}>Verificar planilha</Button><Button disabled={!file||busy||!preview||preview.invalid>0||preview.truncated} onClick={()=>send(false)}>{busy?'Processando...':'Confirmar importação'}</Button></div><p className="hint">Primeiro valide a planilha. A importação só fica disponível quando não houver erros.</p></>:<p className="muted">Seu perfil permite consultar o histórico, sem importar dados.</p>}
  </Card>
  <Card><div className="card-heading"><div><h2>Conferência</h2><p>Prévia de validação dos dados.</p></div></div>
