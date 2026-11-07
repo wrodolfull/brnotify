@@ -13,6 +13,12 @@ O menu **Notificações** permite escolher uma ação sem precisar entender a es
 
 Execute a migração **`database/010_panel_notifications.sql` após `009_ivr_key_no_expiration.sql`** antes da publicação desta etapa. Consulte [Etapa 0 — Notificações simples](docs/SIMPLE_NOTIFICATIONS.md) para deploy, API interna, limites, planilhas e testes.
 
+## Fundação de eventos GoTo — etapa 1
+
+Eventos de telefonia GoTo (chamada iniciada, em andamento e encerrada) e relatórios pós-chamada podem ser recebidos em um registro separado dos compromissos. O monitoramento é ativado em **GoTo Connect** com autorização OAuth adicional, e as chamadas ficam visíveis em **Atividades**. Mensagens WhatsApp recebidas e seus estados de entrega também são registrados de forma normalizada. Não há envio automático a partir de uma chamada nesta etapa.
+
+**Migração obrigatória:** `database/011_goto_event_foundation.sql` depois da 010. Consulte [Fundação de eventos GoTo](docs/GOTO_EVENT_FOUNDATION.md) para escopos, configuração HTTPS, segurança e testes.
+
 ## Estrutura
 - `apps/web`: frontend React + Vite, mobile-first, tema claro e sidebar preta.
 - `apps/api`: backend Express/TypeScript e worker de agendamentos independente.
