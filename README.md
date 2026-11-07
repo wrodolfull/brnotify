@@ -25,6 +25,12 @@ A nova área **Automações** permite configurar `Quando → Aguardar → Verifi
 
 A migração **`database/012_automation_engine.sql`** é obrigatória antes do deploy. Consulte [Motor de automações](docs/AUTOMATION_ENGINE.md) para configuração, segurança, limitações e testes. **Chamada encerrada não é sinônimo de chamada perdida; a etapa 2 não dispara recuperação automática de chamadas.**
 
+## Inteligência de chamadas — etapa 3
+
+A área **Atividades → Insights e recados** reúne sinais de IA, correio de voz e recepcionista IA identificados nos relatórios da GoTo. A função é opcional e pode ser ativada em **GoTo Connect → Chamadas**. As automações passam a aceitar esses gatilhos para registrar avisos e acionar webhooks, sem enviar mensagens automaticamente com base em chamadas não atendidas ou inferências incertas.
+
+**Migração obrigatória:** `database/013_goto_call_intelligence.sql` depois da 012. Consulte [Inteligência de chamadas GoTo](docs/GOTO_CALL_INTELLIGENCE.md) para autorizar relatórios revisados, limites de licenciamento, cuidados com dados e testes.
+
 ## Estrutura
 - `apps/web`: frontend React + Vite, mobile-first, tema claro e sidebar preta.
 - `apps/api`: backend Express/TypeScript e worker de agendamentos independente.
