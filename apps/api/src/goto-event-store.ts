@@ -71,3 +71,9 @@ export async function listGoToCalls(tenantId:string,page:unknown){
  ]);
  return {items:items.rows,total:total.rows[0].n,page:p.page,pages:Math.ceil(total.rows[0].n/20)};
 }
+
+/** 90-day operational retention of external events and finished call summaries. */
+export async function purgeOldGotoEvents(){
+ await query("delete from integration_events where received_at<now()-interval '90 days'");
+ await query("delete from goto_call_conversations where created_at<now()-interval '90 days' and report_status in ('none','complete','failed')");
+}
