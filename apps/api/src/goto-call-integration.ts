@@ -61,7 +61,7 @@ export async function callMonitorStatus(tenantId:string){
   query('select enabled,channel_id,state_subscribed,report_subscription_id,last_error,updated_at from goto_call_monitors where tenant_id=$1',[tenantId]),
   query('select account_key,call_scopes_granted from goto_connections where tenant_id=$1',[tenantId])
  ]);
- return {active:monitor.rows[0]?.enabled===true,
+ return {active:monitor.rows[0]?.enabled===true&&connection.rows[0]?.call_scopes_granted===true,
   call_scopes_granted:connection.rows[0]?.call_scopes_granted===true,
   account_configured:!!connection.rows[0]?.account_key,
   channel_configured:!!monitor.rows[0]?.channel_id,
