@@ -73,7 +73,7 @@ export function normalizeGotoEvent(input:unknown):NormalizedGotoEvent|null{
    conversationId:null,occurredAt:iso(envelope.timestamp||original.timestamp),direction:null,stateType:null,sequence:null,
    accountKey:key,metadata:original.type==='INBOUND_MESSAGE'
     ?{channel:limited(payload?.channel,30),phone:limited(payload?.authorTouchpoint,50),text:limited(payload?.body,500)}
-    :{messageId:limited(payload?.messageId,180),delivery:limited(payload?.deliveryStatus?.description,80)}
+    :{messageId:limited(payload?.messageId,180),delivery:limited(payload?.deliveryStatus?.description,80),channel:limited(payload?.channel,30)}
   };
  }
  return null;
