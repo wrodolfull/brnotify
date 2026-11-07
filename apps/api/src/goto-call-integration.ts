@@ -24,7 +24,7 @@ export async function activateCallMonitoring(tenantId:string){
   `insert into goto_call_monitors(tenant_id,webhook_secret_hash,enabled,state_subscribed,report_subscription_id,channel_id,last_error)
    values($1,$2,false,false,null,null,null)
    on conflict(tenant_id) do update set webhook_secret_hash=excluded.webhook_secret_hash,
-    enabled=false,state_subscribed=false,report_subscription_id=null,channel_id=null,last_error=null,updated_at=now()`,
+    enabled=false,state_subscribed=false,report_subscription_id=null,report_revision_subscription_id=null,channel_id=null,last_error=null,updated_at=now()`,
   [tenantId,secretHash]
  );
  try{
