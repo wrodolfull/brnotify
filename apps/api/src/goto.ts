@@ -15,10 +15,11 @@ export function decrypt(value:string){
  return Buffer.concat([decipher.update(data.subarray(28)),decipher.final()]).toString('utf8');
 }
 export const scopes='messaging.v1.send messaging.v1.read messaging.v1.notifications.manage';
-export function oauthURL(state:string){
+export const callScopes='cr.v1.read call-events.v1.notifications.manage call-events.v1.events.read';
+export function oauthURL(state:string,withCalls=false){
  if(!env.GOTO_CLIENT_ID||!env.GOTO_REDIRECT_URI)throw new Error('Configure o OAuth GoTo no backend');
  const url=new URL('https://authentication.logmeininc.com/oauth/authorize');
- Object.entries({response_type:'code',client_id:env.GOTO_CLIENT_ID,redirect_uri:env.GOTO_REDIRECT_URI,scope:scopes,state}).forEach(([k,v])=>url.searchParams.set(k,v));
+ Object.entries({response_type:'code',client_id:env.GOTO_CLIENT_ID,redirect_uri:env.GOTO_REDIRECT_URI,scope:withCalls?scopes+' '+callScopes:scopes,state}).forEach(([k,v])=>url.searchParams.set(k,v));
  return url.toString();
 }
 type OAuthTokens={access_token:string;refresh_token?:string;expires_in:number;principal?:string};
