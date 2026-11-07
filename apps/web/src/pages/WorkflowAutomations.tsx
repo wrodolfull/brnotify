@@ -253,6 +253,7 @@ export function WorkflowAutomations(){
       failed:'Falha',unknown:'Indeterminada',cancelled:'Cancelada'
      } as Record<string,string>)[r.status]||r.status}</span></div>
      <p>{triggers.find(x=>x.value===r.event_type)?.label||r.event_type} · {fmtDate(r.created_at,true)}</p>
+     {r.signal_code&&<small>{aiInsights.find(x=>x.code===r.signal_code)?.label||r.signal_code}</small>}
      {r.result?.kind==='webhook'&&<small>Webhook colocado na fila de entrega.</small>}
      {r.result?.kind==='whatsapp'&&<small>WhatsApp colocado na fila de envio.</small>}
      {r.result?.kind==='internal'&&<small>{r.result.label}</small>}
