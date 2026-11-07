@@ -32,6 +32,17 @@ export async function scanAutomationEvents(){
    let overLimit=false;
    for(const event of events.rows){
     if(!matchesFlow(flow,event as EventForFlow))continue;
+    if(event.event_type==='message.delivery.updated'){
+     // Some GoTo delivery payloads omit their channel. Only track messages sent by BR Notify.
+     const providerId=typeof event.metadata?.messageId==='string'?event.metadata.messageId:'';
+     if(!providerId)continue;
+     const verified=await client.query(
+      `select 1 from on_demand_messages where tenant_id=$1 and provider_message_id=$2
+       union all select 1 from scheduled_messages where tenant_id=$1 and goto_message_id=$2
+       limit 1`,[flow.tenant_id,providerId]
+     );
+     if(!verified.rowCount)continue;
+    }
     if(quota>=1500){overLimit=true;break}
     const due=new Date(Date.now()+flow.delay_minutes*60_000);
     const inserted=await client.query(
@@ -42,6 +53,10 @@ export async function scanAutomationEvents(){
     if(inserted.rowCount){created++;quota++}
    }
    if(overLimit){
+    await client.query(
+     "update automation_runs set status='cancelled',reason='Limite de segurança atingido',finished_at=now() where tenant_id=$1 and flow_id=$2 and status='pending'",
+     [flow.tenant_id,flow.id]
+    );
     await client.query(
      `update automation_flows set status='paused',
       last_error='Limite de 1.500 execuções em 24 horas neste ambiente. Revise os gatilhos antes de reativar.',
