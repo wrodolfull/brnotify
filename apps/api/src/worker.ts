@@ -5,6 +5,7 @@ import {expireStaleScheduledMessages} from './send-pacing.js';
 import {rebuildEvent} from './time.js';
 import {processCallReportQueue,reclaimCallReportQueue} from './goto-call-report-worker.js';
 import {purgeOldGotoEvents} from './goto-event-store.js';
+import {scanAutomationEvents,processAutomationRun,reclaimAutomationRuns,cleanupAutomationRuns} from './automation-worker.js';
 import {processOutboundWebhooks,reclaimOutboundAfterCrash} from './outbound-webhooks.js';
 
 let running=true;
@@ -33,7 +34,11 @@ async function maintenanceLoop(){
    await reclaimOutboundAfterCrash();
    await reclaimCallReportQueue();
    await processCallReportQueue();
+   await scanAutomationEvents();
+   await reclaimAutomationRuns();
+   for(let i=0;i<10;i++)if(!(await processAutomationRun()))break;
    if(Date.now()-lastEventPurge>24*60*60*1000){
+    await cleanupAutomationRuns();
     await purgeOldGotoEvents();
     lastEventPurge=Date.now();
    }
