@@ -22,6 +22,19 @@ function fieldsOf(definition:any):Field[]{
  return fields;
 }
 type Mode='choose'|'single'|'sheet'|'history';
+const signalNames:Record<string,string>={
+ AI_INSIGHT_PROFANITY_DETECTED:'Linguagem inadequada identificada',
+ AI_INSIGHT_APPOINTMENT_OPPORTUNITY_DETECTED:'Oportunidade de agendamento',
+ AI_INSIGHT_APPOINTMENT_SET_DETECTED:'Agendamento identificado',
+ AI_INSIGHT_APPOINTMENT_MISSED_DETECTED:'Oportunidade de agendamento não aproveitada',
+ AI_INSIGHT_SALE_PITCH_DETECTED:'Abordagem comercial',
+ AI_INSIGHT_SALE_CLOSE_DETECTED:'Possível venda concluída',
+ AI_INSIGHT_SALE_PITCH_FAILED_DETECTED:'Abordagem comercial sem fechamento',
+ VOICEMAIL_NEW:'Novo recado de voz',VOICEMAIL_READ:'Recado de voz ouvido',
+ VOICEMAIL_DELETED:'Recado de voz excluído',
+ AIR_SCHEDULING_INTERRUPTED:'Agendamento da recepcionista IA interrompido',
+ AIR_SCHEDULING_ERROR:'Erro de agendamento da recepcionista IA'
+};
 const statuses=[['','Todos'],['queued','Na fila'],['scheduled','Programados'],['sent','Enviados'],['delivered','Entregues'],['failed','Falhas']] as const;
 const choices=[
  {id:'single',title:'Enviar para uma pessoa',description:'Escolha um contato, uma mensagem e quando enviar.'},
@@ -47,10 +60,11 @@ export function Notifications({initialMode='choose'}:{initialMode?:Mode}){
  const [error,setError]=useState('');
  const [busy,setBusy]=useState(false);
  const [status,setStatus]=useState('');
- const [historyTab,setHistoryTab]=useState<'messages'|'calls'>('messages');
+ const [historyTab,setHistoryTab]=useState<'messages'|'calls'|'intelligence'>('messages');
  const [historyRevision,setHistoryRevision]=useState(0);
  const history=useList('/api/notifications/history?revision='+historyRevision+(status?'&status='+status:''),mode==='history');
  const callHistory=useList('/api/goto/calls',mode==='history'&&historyTab==='calls');
+ const intelligence=useList('/api/goto/events?kind=intelligence',mode==='history'&&historyTab==='intelligence');
  const template=templates.find(x=>x.id===templateId);
  const fields=useMemo(()=>fieldsOf(template?.definition),[template]);
  const textFields=fields.filter(f=>f.kind==='text');
@@ -205,6 +219,8 @@ export function Notifications({initialMode='choose'}:{initialMode?:Mode}){
      onClick={()=>setHistoryTab('messages')}>Mensagens</button>
     <button type="button" className={'filter-chip '+(historyTab==='calls'?'filter-active':'')}
      onClick={()=>setHistoryTab('calls')}>Chamadas</button>
+    <button type="button" className={'filter-chip '+(historyTab==='intelligence'?'filter-active':'')}
+     onClick={()=>setHistoryTab('intelligence')}>Insights e recados</button>
    </div>
    {historyTab==='messages'?<>
     <div className="status-filters notify-filter">
@@ -222,8 +238,8 @@ export function Notifications({initialMode='choose'}:{initialMode?:Mode}){
       {canEdit&&m.origin==='panel'&&m.status==='queued'&&<Button secondary onClick={()=>void cancelQueued(m.id)}>Cancelar envio</Button>}
      </div>)}</div>:!history.loading&&<Empty title="Nenhuma mensagem neste filtro" subtitle="Os envios programados e seus resultados aparecerão aqui."/>}
     <Pagination page={history.page} pages={history.data.pages} onChange={history.setPage}/>
-   </>:<>
-    <p className="muted">Chamadas registradas pela integração com a GoTo. A classificação de chamadas perdidas e as ações automáticas serão adicionadas depois.</p>
+   </>:historyTab==='calls'?<>
+    <p className="muted">Chamadas recebidas e realizadas pelo GoTo Connect. O sistema destaca ligações para revisão, sem presumir que foram perdidas.</p>
     <ErrorHint error={callHistory.error}/>
     {callHistory.data.items.length?<div className="messages-list">{callHistory.data.items.map((call:any)=>
      <div className="message-row" key={call.conversation_space_id}>
@@ -236,11 +252,30 @@ export function Notifications({initialMode='choose'}:{initialMode?:Mode}){
        <p className="text-small">{call.report_status==='complete'?'Relatório consultado':
         call.report_status==='failed'?'Falha ao consultar o relatório':
         ['pending','retry','processing'].includes(call.report_status)?'Aguardando relatório da GoTo':'Sem relatório disponível ainda'}</p>
+       {call.attention_level==='review'&&<p className="notify-alert">Revisar atendimento: o relatório não mostrou uma linha conectada. Isso não comprova que a chamada foi perdida.</p>}
+       {call.attention_level==='evidence_of_answer'&&<p className="text-small">O relatório contém evidência de linha conectada.</p>}
+       {(call.intelligence_signal_count||0)>0&&<p className="text-small">{call.intelligence_signal_count} sinal(is) de inteligência ou correio de voz.</p>}
        {call.sequence_gap&&<p className="notify-alert">Foram detectadas lacunas na sequência dos eventos desta chamada. A análise poderá exigir reconciliação.</p>}
       </div>
      </div>)}</div>:!callHistory.loading&&<Empty title="Nenhuma chamada registrada" subtitle="Autorize e ative o monitoramento na área GoTo Connect para receber novos eventos."/>}
     <Pagination page={callHistory.page} pages={callHistory.data.pages} onChange={callHistory.setPage}/>
     <Link to="/settings" className="notify-text-button">Configurar telefonia</Link>
+   </>:<>
+    <p className="muted">Sinais de IA e correio de voz informados pela GoTo após as ligações. Disponibilidade depende dos recursos da conta e da assinatura de atualizações.</p>
+    <ErrorHint error={intelligence.error}/>
+    {intelligence.data.items.length?<div className="messages-list">{intelligence.data.items.map((event:any)=>
+     <div className="message-row" key={event.id}>
+      <div className="message-content">
+       <div className="message-row-top">
+        <strong>{signalNames[event.metadata?.signal_code]||'Sinal de comunicação da GoTo'}</strong>
+        <span className="status">{event.metadata?.signal_group==='ai'?'Insight da GoTo':event.metadata?.signal_group==='voicemail'?'Correio de voz':'Recepcionista IA'}</span>
+       </div>
+       <p className="muted">Registrado em {fmtDate(event.occurred_at,true)}</p>
+       <p className="text-small">Ligação: {event.conversation_space_id||'Não identificada'}</p>
+      </div>
+     </div>)}</div>:!intelligence.loading&&<Empty title="Ainda não há insights" subtitle="Ative os insights na integração GoTo e aguarde novos relatórios de chamadas."/>}
+    <Pagination page={intelligence.page} pages={intelligence.data.pages} onChange={intelligence.setPage}/>
+    <Link to="/flows" className="notify-text-button">Configurar automações</Link>
    </>}
   </Card>}
  </div>;
