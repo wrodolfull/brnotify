@@ -1,0 +1,51 @@
+/* Etapa 2: automações no mesmo sistema visual do BR Notify. */
+.wf-page{max-width:1120px}
+.wf-page h2{font-size:17px;letter-spacing:-.3px}
+.wf-list-header{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:18px}
+.wf-list-header h2{margin:0}
+.wf-link{border:0;background:transparent;padding:4px;color:#327cf3;font-size:12px;font-weight:700;cursor:pointer}
+.wf-example-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:20px}
+.wf-example{background:#fff;border:1px solid #e5eaf0;border-radius:14px;padding:19px;min-height:140px;text-align:left;cursor:pointer;display:flex;flex-direction:column;gap:9px;color:#20262f}
+.wf-example:hover{border-color:#327cf3;background:#f8fbff}
+.wf-example strong{font-size:14px}
+.wf-example span{font-size:12px;line-height:1.6;color:#808997;flex:1}
+.wf-example small{font-weight:700;color:#327cf3}
+.wf-page>.card +.card{margin-top:18px}
+.wf-list{display:flex;flex-direction:column}
+.wf-list-item{display:flex;align-items:center;justify-content:space-between;padding:19px 0;gap:20px;border-top:1px solid #eef1f4}
+.wf-list-item:first-child{border-top:0}
+.wf-list-main{min-width:0;flex:1}
+.wf-title-line{display:flex;align-items:center;gap:11px;flex-wrap:wrap}
+.wf-title-line strong{font-size:14px}
+.wf-list-main p{margin:8px 0;font-size:12px;color:#7d8795;line-height:1.6}
+.wf-list-main small{font-size:11px;color:#939caa}
+.wf-item-actions{display:flex;gap:8px;flex-wrap:wrap}
+.wf-status{display:inline-block;border-radius:7px;padding:4px 8px;background:#f1f2f4;color:#657083;font-size:10px;font-weight:700}
+.wf-active,.wf-run-completed{color:#12724b;background:#e9f7ef}
+.wf-paused,.wf-run-cancelled,.wf-run-skipped{color:#6b6f7b;background:#f0f1f3}
+.wf-run-failed,.wf-run-unknown{color:#a33e3e;background:#fff0ef}
+.wf-run-pending,.wf-run-processing{color:#9a6a16;background:#fff5df}
+.wf-footnote{font-size:12px;color:#89929f;padding:14px 0}
+.wf-footnote a{color:#327cf3}
+.wf-editor{max-width:780px}
+.wf-editor>.card{margin-bottom:22px}
+.wf-flow{display:flex;flex-direction:column}
+.wf-step{padding:25px;background:#fff;border:1px solid #e8ecf1;border-radius:17px;display:flex;flex-direction:column;gap:17px}
+.wf-step-heading{display:flex;gap:14px;align-items:flex-start}
+.wf-step-number{display:grid;place-items:center;flex:none;width:32px;height:32px;border-radius:10px;background:#eaf2ff;color:#327cf3;font-size:13px;font-weight:800}
+.wf-step-heading h2{font-size:17px;margin:0 0 5px}
+.wf-step-heading p{font-size:12px;color:#87909c;margin:0;line-height:1.6}
+.wf-step .field>span{font-size:12px}
+.wf-step .field input,.wf-step .field select{font-size:13px;height:46px}
+.wf-step .field input:focus,.wf-step .field select:focus{border-color:#327cf3}
+.wf-connector{display:flex;justify-content:center;height:32px}
+.wf-connector span{width:2px;background:#d6e3f8;display:block;height:32px}
+.wf-inline{display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap}
+.wf-inline .field{max-width:240px;flex:1}
+.wf-inline p{flex:1;font-size:12px;line-height:1.5;color:#8b94a0;margin:0 0 7px}
+.wf-hint{background:#f7f9fc;border:1px solid #eff1f4;border-radius:11px;padding:12px;font-size:12px;color:#758191;line-height:1.6;margin:0}
+.wf-hint a{color:#327cf3}
+.wf-check{display:flex;gap:12px;align-items:flex-start;font-size:12px;line-height:1.7;color:#384355}
+.wf-check input{accent-color:#327cf3;margin-top:5px}
+.wf-actions{display:flex;justify-content:flex-end;gap:10px;margin:22px 0 35px}
+@media(max-width:760px){.wf-example-grid{grid-template-columns:1fr}.wf-list-item{align-items:flex-start;flex-direction:column;gap:12px}.wf-item-actions{width:100%}.wf-step{padding:18px}.wf-actions .button{flex:1}}
