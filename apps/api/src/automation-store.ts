@@ -3,6 +3,13 @@ import {flowSchema,type FlowInput} from './automation-model.js';
 import {ApiOperationError,withTransaction} from './external-operations.js';
 
 const uuidRe=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const fromRow=(flow:any)=>flowSchema.parse({
+ title:flow.title,trigger_type:flow.trigger_type,match_mode:flow.match_mode,
+ match_text:flow.match_text,delay_minutes:flow.delay_minutes,
+ check_no_new_message:flow.check_no_new_message,action_type:flow.action_type,
+ action_label:flow.action_label,endpoint_id:flow.endpoint_id,
+ template_id:flow.template_id,template_variables:flow.template_variables
+});
 const stored=(input:FlowInput)=>[
  input.title,input.trigger_type,input.match_mode,input.match_text||null,input.delay_minutes,
  input.check_no_new_message,input.action_type,input.action_label,input.endpoint_id||null,
@@ -70,13 +77,13 @@ export async function setFlowStatus(tenantId:string,id:string,status:'active'|'p
    const active=await run("select count(*)::int total from automation_flows where tenant_id=$1 and status='active'",[tenantId]);
    if(Number(active.rows[0].total)>=20)throw new ApiOperationError(409,'Limite de 20 automações ativas.');
    // Dependencies validated using the same tenant, but resource state may change before transaction.
-   await ensureFlowDependencies(tenantId,flowSchema.parse(flow));
+   await ensureFlowDependencies(tenantId,fromRow(flow));
   }
   await run("update automation_runs set status='cancelled',reason='Automação pausada ou reativada',finished_at=now() where tenant_id=$1 and flow_id=$2 and status='pending'",[tenantId,id]);
   const changed=await run(
    `update automation_flows set status=$3,revision=revision+1,
     cursor_received_at=now(),cursor_event_id='00000000-0000-0000-0000-000000000000'::uuid,
-    updated_at=now() where tenant_id=$1 and id=$2 returning *`,[tenantId,id,status]
+    last_error=null,updated_at=now() where tenant_id=$1 and id=$2 returning *`,[tenantId,id,status]
   );
   return changed.rows[0];
  });
