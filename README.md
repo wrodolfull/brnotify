@@ -19,6 +19,12 @@ Eventos de telefonia GoTo (chamada iniciada, em andamento e encerrada) e relató
 
 **Migração obrigatória:** `database/011_goto_event_foundation.sql` depois da 010. Consulte [Fundação de eventos GoTo](docs/GOTO_EVENT_FOUNDATION.md) para escopos, configuração HTTPS, segurança e testes.
 
+## Motor de automações — etapa 2
+
+A nova área **Automações** permite configurar `Quando → Aguardar → Verificar → Fazer` a partir dos eventos GoTo de WhatsApp e telefonia, mantendo separados os lembretes de compromissos. As ações são avisos registrados na ferramenta, webhooks assinados ou templates WhatsApp aprovados para contatos consentidos. As automações começam desativadas e só recebem eventos novos após ativação.
+
+A migração **`database/012_automation_engine.sql`** é obrigatória antes do deploy. Consulte [Motor de automações](docs/AUTOMATION_ENGINE.md) para configuração, segurança, limitações e testes. **Chamada encerrada não é sinônimo de chamada perdida; a etapa 2 não dispara recuperação automática de chamadas.**
+
 ## Estrutura
 - `apps/web`: frontend React + Vite, mobile-first, tema claro e sidebar preta.
 - `apps/api`: backend Express/TypeScript e worker de agendamentos independente.

@@ -11,6 +11,7 @@ import './goto-rich.css';
 import './template-library.css';
 import './api-docs.css';
 import './notifications.css';
+import './workflows.css';
 function Root(){
  const location=useLocation();
  if(location.pathname==='/docs'||location.pathname.startsWith('/docs/'))return <ApiDocs/>;

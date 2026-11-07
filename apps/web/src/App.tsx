@@ -1,7 +1,7 @@
 import {useCallback,useEffect,useMemo,useRef,useState,type FormEvent,type RefObject} from 'react';
 import type {Session} from '@supabase/supabase-js';
 import {NavLink,Navigate,Route,Routes,useLocation,useNavigate} from 'react-router-dom';
-import {Bell,Building2,ChevronDown,LayoutDashboard,LogOut,Menu,Send,Settings,Shield,Users,X,LockKeyhole,PlugZap,ChartNoAxesCombined} from 'lucide-react';
+import {Bell,Building2,ChevronDown,LayoutDashboard,Clock3,LogOut,Menu,Send,Settings,Shield,Users,X,LockKeyhole,PlugZap,ChartNoAxesCombined} from 'lucide-react';
 import {supabase,callAPI,type Actor} from './api';
 import {preserveAuthenticatedView,requireActiveSession} from './auth-session';
 import {AppContext} from './context';
@@ -11,6 +11,7 @@ import {Contacts} from './pages/Contacts';
 import {Events} from './pages/Events';
 import {Imports} from './pages/Imports';
 import {Automations} from './pages/Automations';
+import {WorkflowAutomations} from './pages/WorkflowAutomations';
 import {Messages} from './pages/Messages';
 import {Notifications} from './pages/Notifications';
 import {SettingsPage} from './pages/Settings';
@@ -87,6 +88,7 @@ function Workspace({sessionRef}:{sessionRef:RefObject<Session|null>}){
     <nav className="side-nav"><span className="sidebar-caption">PRINCIPAL</span>
      <MenuItem to="/" icon={LayoutDashboard} label="Visão geral" onClose={close}/>
      <MenuItem to="/notifications" icon={Send} label="Notificações" onClose={close}/>
+     <MenuItem to="/flows" icon={Clock3} label="Automações" onClose={close}/>
      <MenuItem to="/contacts" icon={Users} label="Contatos" onClose={close}/>
      <MenuItem to="/activities" icon={ChartNoAxesCombined} label="Atividades" onClose={close}/>
      <MenuItem to="/reports" icon={ChartNoAxesCombined} label="Relatórios" onClose={close}/>
@@ -99,7 +101,7 @@ function Workspace({sessionRef}:{sessionRef:RefObject<Session|null>}){
    </aside>
    <div className="main-shell"><header className="topbar"><button className="mobile-menu" aria-label="Abrir menu" onClick={()=>setMenuOpen(true)}><Menu size={23}/></button><div className="topbar-breadcrumb"><span>BR Notify</span><span className="divider-dot">/</span><strong>{tenantName}</strong></div><div className="topbar-right"><span className="topbar-env">{isSuper?'Super Admin':role==='viewer'?'Visualização':'Admin'}</span><div className="topbar-avatar">{(actor?.email||'').slice(0,1).toUpperCase()}</div></div></header>
     <main className="page-content">{!tenantId&&location.pathname!=='/tenants'?<div className="empty-workspace"><Building2 size={34}/><h2>Nenhum ambiente selecionado</h2><p>Crie ou selecione um ambiente para começar.</p>{isSuper&&<Button onClick={()=>navigate('/tenants')}>Gerenciar ambientes</Button>}</div>:
-     <Routes><Route path="/" element={<Dashboard/>}/><Route path="/notifications" element={<Notifications/>}/><Route path="/activities" element={<Notifications initialMode="history"/>}/><Route path="/contacts" element={<Contacts/>}/><Route path="/events" element={<Events/>}/><Route path="/imports" element={<Imports/>}/><Route path="/automations" element={<Automations/>}/><Route path="/messages" element={<Messages/>}/><Route path="/reports" element={<Reports/>}/><Route path="/settings" element={<SettingsPage/>}/><Route path="/template-library" element={<TemplateLibrary/>}/><Route path="/api-integrations" element={role==='admin'?<ApiIntegrations/>:<Navigate to="/"/>}/><Route path="/tenants" element={isSuper?<Tenants/>:<Navigate to="/"/>}/><Route path="/members" element={isSuper?<Members/>:<Navigate to="/"/>}/><Route path="*" element={<Navigate to="/"/>}/></Routes>}</main>
+     <Routes><Route path="/" element={<Dashboard/>}/><Route path="/notifications" element={<Notifications/>}/><Route path="/activities" element={<Notifications initialMode="history"/>}/><Route path="/contacts" element={<Contacts/>}/><Route path="/events" element={<Events/>}/><Route path="/imports" element={<Imports/>}/><Route path="/flows" element={<WorkflowAutomations/>}/><Route path="/automations" element={<Automations/>}/><Route path="/messages" element={<Messages/>}/><Route path="/reports" element={<Reports/>}/><Route path="/settings" element={<SettingsPage/>}/><Route path="/template-library" element={<TemplateLibrary/>}/><Route path="/api-integrations" element={role==='admin'?<ApiIntegrations/>:<Navigate to="/"/>}/><Route path="/tenants" element={isSuper?<Tenants/>:<Navigate to="/"/>}/><Route path="/members" element={isSuper?<Members/>:<Navigate to="/"/>}/><Route path="*" element={<Navigate to="/"/>}/></Routes>}</main>
    </div>
    {toast&&<div role="status" className={'toast toast-'+toast.kind}>{toast.message}<button onClick={()=>setToast(null)}><X size={15}/></button></div>}
   </div>

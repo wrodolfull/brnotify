@@ -216,7 +216,7 @@ export function Notifications({initialMode='choose'}:{initialMode?:Mode}){
       <div className="message-content">
        <div className="message-row-top"><strong>{m.contact_name}</strong><Status value={m.status}/></div>
        <p className="muted">{m.title} · {m.phone}</p>
-       <p className="text-small">Programado para {fmtDate(m.scheduled_at,true)} · {m.origin==='reminder'?'Lembrete de compromisso':m.origin==='ivr'?'Integração / URA':'Envio manual'}</p>
+       <p className="text-small">Programado para {fmtDate(m.scheduled_at,true)} · {m.origin==='reminder'?'Lembrete de compromisso':m.origin==='ivr'?'Integração / URA':m.origin==='automation'?'Automação':'Envio manual'}</p>
        {m.error_description&&<p className="notify-alert">{m.error_description}</p>}
       </div>
       {canEdit&&m.origin==='panel'&&m.status==='queued'&&<Button secondary onClick={()=>void cancelQueued(m.id)}>Cancelar envio</Button>}

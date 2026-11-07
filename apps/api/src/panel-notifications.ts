@@ -59,10 +59,10 @@ async function prepare(tenantId:string,raw:unknown){
  return {data,contact,template,input,mediaId,when};
 }
 
-export async function enqueuePanelNotification(tenantId:string,raw:unknown){
+export async function enqueuePanelNotification(tenantId:string,raw:unknown,options?:{source:'automation';runId:string}){
  const p=await prepare(tenantId,raw);
  const fingerprint=crypto.createHash('sha256').update(
-  onDemandFingerprint(tenantId,p.input,p.template.id)+':'+(p.data.scheduled_at?p.when.toISOString():'now')
+  onDemandFingerprint(tenantId,p.input,p.template.id)+':'+(p.data.scheduled_at?p.when.toISOString():'now')+(options?':automation:'+options.runId:'')
  ).digest('hex');
  return withTransaction(async run=>{
   await run('select pg_advisory_xact_lock(hashtext($1),hashtext($2))',[tenantId,fingerprint]);
@@ -76,9 +76,9 @@ export async function enqueuePanelNotification(tenantId:string,raw:unknown){
   if(Number(limit.rows[0]?.total||0)>=MAX_SENDS_PER_HOUR_PER_NUMBER)
    throw new ApiOperationError(429,'Limite de notificações para este contato no período.');
   const added=await run(
-   "insert into on_demand_messages(tenant_id,api_key_id,contact_id,template_id,media_asset_id,recipient_phone,recipient_name,variables,consent_source,dedupe_hash,source,scheduled_for,next_attempt_at,expires_at) values($1,null,$2,$3,$4,$5,$6,$7,$8,$9,'panel',$10,$10,$11) returning id,status",
+   "insert into on_demand_messages(tenant_id,api_key_id,contact_id,template_id,media_asset_id,recipient_phone,recipient_name,variables,consent_source,dedupe_hash,source,automation_run_id,scheduled_for,next_attempt_at,expires_at) values($1,null,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$12,$13) returning id,status",
    [tenantId,p.contact.id,p.template.id,p.mediaId,p.input.to,p.input.name,JSON.stringify(p.input.variables),
-    'explicit_customer_request',fingerprint,p.when,new Date(p.when.getTime()+30*60000)]
+    'explicit_customer_request',fingerprint,options?.source||'panel',options?.runId||null,p.when,new Date(p.when.getTime()+30*60000)]
   );
   return {id:added.rows[0].id,status:added.rows[0].status,deduplicated:false,scheduled_for:p.when};
  });

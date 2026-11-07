@@ -59,7 +59,7 @@ export async function processOnDemandMessages(){
   if(!v||v.tenant_status!=='active'||!v.from_touchpoint||!v.template_name)
    throw new Error('Ambiente, template ou conexão GoTo indisponível');
   if(!v.consent||v.opted_out_at)throw new Error('Contato não autorizado ou com opt-out');
-  if(v.source!=='panel'&&(!v.api_key_id||v.token_revoked_at||!v.token_expires_at||new Date(v.token_expires_at).getTime()<=Date.now()))
+  if(!['panel','automation'].includes(v.source)&&(!v.api_key_id||v.token_revoked_at||!v.token_expires_at||new Date(v.token_expires_at).getTime()<=Date.now()))
    throw new Error('Chave da integração revogada ou expirada');
   if(new Date(v.expires_at).getTime()<=Date.now())throw new Error('Notificação expirou antes do envio');
   const template={name:v.template_name,language_code:v.language_code,status:v.template_status,
