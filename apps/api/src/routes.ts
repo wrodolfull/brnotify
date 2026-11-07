@@ -378,6 +378,13 @@ router.post('/api/notifications/send',tenant(true),activeTenant,wrap(async(req,r
 router.get('/api/notifications/history',tenant(),wrap(async(req,res)=>{
  res.json(await panelHistory(req.tenantId!,req.query.page,req.query.status?String(req.query.status):null));
 }));
+router.post('/api/notifications/:id/cancel',tenant(true),activeTenant,wrap(async(req,res)=>{
+ const id=uuid.parse(req.params.id);
+ const result=await query("update on_demand_messages set status='cancelled',updated_at=now() where tenant_id=$1 and id=$2 and source='panel' and status='queued' returning id",[req.tenantId,id]);
+ if(!result.rowCount)return res.status(409).json({error:'Este envio não pode ser cancelado. Verifique se já foi processado.'});
+ await audit(req.tenantId!,req.actor!.id,'notification.panel_cancelled',{id});
+ res.json({id,status:'cancelled'});
+}));
 router.post('/api/notifications/batch/preview',tenant(true),activeTenant,upload.single('file'),wrap((req,res)=>panelBatch(req,res,true)));
 router.post('/api/notifications/batch',tenant(true),activeTenant,upload.single('file'),wrap((req,res)=>panelBatch(req,res,false)));
 
