@@ -39,8 +39,8 @@ export function extractGotoReportSignals(report:unknown):CallSignal[]{
  if(!root)return [];
  const conversationId=str(root.conversationSpaceId),accountKey=str(root.accountKey);
  if(!conversationId||!accountKey)return [];
- const nested: Array<{data:unknown;scope:string}>=[];
- const add=(value:unknown,scope:string)=>{for(const x of list(value))nested.push({data:x,scope})};
+ const nested: Array<{data:unknown;scope:string;position:number}>=[];
+ const add=(value:unknown,scope:string)=>{for(const [position,x] of list(value).entries())nested.push({data:x,scope,position})};
  add(root.actions,'report');
  for(const [i,person] of list(root.participants).entries()){
   const p=obj(person);if(!p)continue;
@@ -57,7 +57,7 @@ export function extractGotoReportSignals(report:unknown):CallSignal[]{
  const result:CallSignal[]=[];
  const seen=new Set<string>();
  const happened=str(root.callEnded)||new Date().toISOString();
- for(const {data,scope} of nested.slice(0,300)){
+ for(const {data,scope,position} of nested.slice(0,300)){
   const action=obj(data);if(!action)continue;
   const typeField=obj(action.type);
   const type=str(action.type)||str(typeField?.value)||str(action.actionType);
@@ -72,7 +72,7 @@ export function extractGotoReportSignals(report:unknown):CallSignal[]{
   // Prefer provider stable identifiers over payload ordering; no raw IDs in storage.
   const identifier=providerId||transcriptId||voicemailId;
   // Duplicate signal exposed in root and participant arrays must only be stored once.
-  const key=identifier?type+':'+identifier:type+':'+scope;
+  const key=identifier?type+':'+identifier:type+':'+scope+':'+position;
   if(seen.has(key))continue;
   seen.add(key);
   const stamp=str(action.timestamp)||str(action.createdTime)||happened;
