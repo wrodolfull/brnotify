@@ -1,6 +1,11 @@
 import {z} from 'zod';
+import {GOTO_AI_SIGNAL_TYPES} from './goto-report-intelligence.js';
 
-export const TRIGGER_TYPES=['message.received','message.delivery.updated','call.ended','call.report.ready'] as const;
+export const TRIGGER_TYPES=[
+ 'message.received','message.delivery.updated','call.ended','call.report.ready',
+ 'call.ai.insight.detected','call.voicemail.new','call.voicemail.read',
+ 'call.voicemail.deleted','call.receptionist.scheduling_issue'
+] as const;
 export const ACTION_TYPES=['internal','webhook','whatsapp'] as const;
 const uuid=z.string().uuid();
 export const flowSchema=z.object({
@@ -19,9 +24,13 @@ export const flowSchema=z.object({
  const add=(message:string,path:string)=>ctx.addIssue({code:z.ZodIssueCode.custom,message,path:[path]});
  const inbound=v.trigger_type==='message.received';
  const delivery=v.trigger_type==='message.delivery.updated';
- if(!inbound&&!delivery&&v.match_mode!=='any')add('Este evento não oferece filtros adicionais.','match_mode');
+ const insight=v.trigger_type==='call.ai.insight.detected';
+ if(!inbound&&!delivery&&!insight&&v.match_mode!=='any')add('Este evento não oferece filtros adicionais.','match_mode');
+ if(insight&&v.match_mode==='contains')add('Selecione um insight específico, sem texto livre.','match_mode');
+ if(insight&&v.match_mode==='equals'&&!GOTO_AI_SIGNAL_TYPES.includes(v.match_text as any))
+  add('Selecione um tipo de insight reconhecido pela GoTo.','match_text');
  if(delivery&&v.match_mode==='contains')add('Para status de entrega, use comparação exata.','match_mode');
- if((inbound||delivery)&&v.match_mode!=='any'&&!v.match_text)add('Informe o texto ou status esperado.','match_text');
+ if((inbound||delivery||insight)&&v.match_mode!=='any'&&!v.match_text)add('Informe o texto ou status esperado.','match_text');
  if(v.check_no_new_message&&(!inbound||v.delay_minutes<1))add('A verificação de novas respostas exige um gatilho de WhatsApp e uma espera.','check_no_new_message');
  if(v.action_type==='whatsapp'){
   if(!inbound)add('Envio automático pelo WhatsApp nesta etapa exige uma mensagem recebida como gatilho.','action_type');
@@ -40,7 +49,7 @@ export function matchesFlow(flow:Pick<FlowInput,'trigger_type'|'match_mode'|'mat
  if(flow.trigger_type==='message.received'&&metadata.channel!=='WHATSAPP')return false;
  if(flow.trigger_type==='message.delivery.updated'&&metadata.channel&&metadata.channel!=='WHATSAPP')return false;
  if(flow.match_mode==='any')return true;
- const actual=String(flow.trigger_type==='message.delivery.updated'?metadata.delivery||'':metadata.text||'').trim().normalize('NFKC').toLocaleLowerCase('pt-BR');
+ const actual=String(flow.trigger_type==='call.ai.insight.detected'?metadata.signal_code||'':flow.trigger_type==='message.delivery.updated'?metadata.delivery||'':metadata.text||'').trim().normalize('NFKC').toLocaleLowerCase('pt-BR');
  const expected=String(flow.match_text||'').trim().normalize('NFKC').toLocaleLowerCase('pt-BR');
  if(!expected)return false;
  return flow.match_mode==='equals'?actual===expected:actual.includes(expected);
