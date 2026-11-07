@@ -54,6 +54,32 @@ try{
  await received('after-pause','2');
  await scanAutomationEvents();
  assert.equal((await query('select count(*)::int n from automation_runs where flow_id=$1',[flow.id])).rows[0].n,1);
+ const delayed=await createFlow(tenant,{
+  ...base,title:'Sem nova resposta',match_mode:'any',match_text:null,
+  delay_minutes:1,check_no_new_message:true
+ });
+ await setFlowStatus(tenant,delayed.id,'active');
+ await received('pending-client-reply','Primeiro texto');
+ await scanAutomationEvents();
+ await recordGotoEvent(tenant,{
+  source:'inbox-notification',externalKey:'later-client-reply',type:'message.received',
+  conversationId:null,occurredAt:new Date(Date.now()+2000).toISOString(),
+  direction:null,stateType:null,sequence:null,accountKey:account,
+  metadata:{channel:'WHATSAPP',phone:'+5519999999999',text:'Nova resposta'}
+ },account);
+ await scanAutomationEvents();
+ await query(
+  `update automation_runs set due_at=now()-interval '1 second'
+   where flow_id=$1 and event_id in(select id from integration_events where external_key='pending-client-reply' and tenant_id=$2)`,
+  [delayed.id,tenant]
+ );
+ assert.equal(await processAutomationRun(),1);
+ const oldRun=await query(
+  `select r.status,r.reason from automation_runs r join integration_events e on e.id=r.event_id
+   where r.flow_id=$1 and e.external_key='pending-client-reply'`,[delayed.id]
+ );
+ assert.equal(oldRun.rows[0].status,'skipped','A newer customer reply suppresses the waiting action');
+ await setFlowStatus(tenant,delayed.id,'paused');
  const webhookEndpoint=await query(
   "insert into outbound_webhook_endpoints(tenant_id,label,destination_url,signing_secret_enc,event_types) values($1,'CRM CI','https://example.com/hooks','encrypted-test',array['appointment.confirmed']) returning id",
   [tenant]
