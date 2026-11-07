@@ -29,10 +29,10 @@ const choices=[
  {id:'reminders',title:'Criar lembretes de compromissos',description:'Avise clientes antes de consultas, retornos ou outros compromissos.'}
 ] as const;
 
-export function Notifications(){
+export function Notifications({initialMode='choose'}:{initialMode?:Mode}){
  const {api,role,notify}=useApp();
  const canEdit=role==='admin';
- const [mode,setMode]=useState<Mode>('choose');
+ const [mode,setMode]=useState<Mode>(initialMode);
  const [templates,setTemplates]=useState<Template[]>([]);
  const [templateId,setTemplateId]=useState('');
  const [contactSearch,setContactSearch]=useState('');
