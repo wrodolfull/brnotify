@@ -49,9 +49,11 @@ export async function recordGotoEvent(tenantId:string,event:NormalizedGotoEvent,
  finally{db.release()}
 }
 
-export async function listGoToEvents(tenantId:string,page:unknown,kind:'call'|'message'|'all'){
+export async function listGoToEvents(tenantId:string,page:unknown,kind:'call'|'message'|'intelligence'|'all'){
  const p=pageParams(page);
- const filter=kind==='call'?"and event_type like 'call.%'":kind==='message'?"and event_type like 'message.%'":'';
+ const filter=kind==='intelligence'?
+  "and event_type in ('call.ai.insight.detected','call.voicemail.new','call.voicemail.read','call.voicemail.deleted','call.receptionist.scheduling_issue')":
+  kind==='call'?"and event_type like 'call.%'":kind==='message'?"and event_type like 'message.%'":'';
  const [items,total]=await Promise.all([
   query(`select id,event_type,source,conversation_space_id,occurred_at,metadata
    from integration_events where tenant_id=$1 ${filter}
@@ -64,7 +66,8 @@ export async function listGoToCalls(tenantId:string,page:unknown){
  const p=pageParams(page);
  const [items,total]=await Promise.all([
   query(`select conversation_space_id,direction,last_state,started_at,ended_at,
-   sequence_gap,report_status,summary,updated_at
+   sequence_gap,report_status,summary,updated_at,
+   intelligence_checked_at,intelligence_signal_count,attention_level
    from goto_call_conversations where tenant_id=$1 order by coalesce(ended_at,started_at,created_at) desc,id desc
    limit 20 offset $2`,[tenantId,p.offset]),
   query('select count(*)::int as n from goto_call_conversations where tenant_id=$1',[tenantId])

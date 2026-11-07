@@ -113,6 +113,15 @@ export function SettingsPage(){
   }catch(e:any){setError(e.message);await loadCalls()}
   finally{setBusy(false)}
  }
+ async function activateIntelligence(){
+  setBusy(true);setError('');
+  try{
+   await api('/api/goto/calls/intelligence/activate',{method:'POST'});
+   notify('Insights e eventos de correio de voz habilitados.');
+   await loadCalls();
+  }catch(e:any){setError(e.message);await loadCalls()}
+  finally{setBusy(false)}
+ }
  async function saveConnection(e:FormEvent<HTMLFormElement>){
   e.preventDefault();setBusy(true);setError('');
   const values=new FormData(e.currentTarget);
@@ -241,7 +250,18 @@ export function SettingsPage(){
         ?<Button secondary onClick={()=>void connect(true)}>Autorizar telefonia</Button>
         :<Button onClick={()=>void activateCalls()} disabled={busy||!callMonitor.account_configured}>{busy?'Ativando...':'Ativar monitoramento'}</Button>}
       </div>}
-    {callMonitor.active&&<div className="bottom-hint"><span>Estados das chamadas e relatórios recebidos. As automações serão configuradas na próxima etapa.</span></div>}
+    {callMonitor.active&&<div className="bottom-hint">
+     <span>Estados de chamada e relatórios recebidos pela GoTo.</span>
+    </div>}
+    {callMonitor.active&&<div className="integration-form">
+     <h3>Inteligência de chamadas</h3>
+     <p className="hint">Ative as atualizações pós-ligação para receber os sinais de IA e correio de voz disponíveis na sua conta GoTo. Não criamos transcrições nem enviamos mensagens automaticamente.</p>
+     {callMonitor.intelligence_active
+       ?<p className="success-line">Atualizações de inteligência habilitadas.</p>
+       :canEdit&&<Button secondary disabled={busy} onClick={()=>void activateIntelligence()}>
+        {busy?'Ativando...':'Ativar insights e correio de voz'}
+       </Button>}
+    </div>}
     <Link to="/activities" className="text-link">Consultar atividades</Link>
    </>}
   </Card>

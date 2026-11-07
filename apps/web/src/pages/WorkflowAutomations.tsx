@@ -4,7 +4,9 @@ import {useApp} from '../context';
 import {Button,Card,Empty,ErrorHint,PageTitle,Pagination,useList} from '../components';
 import {fmtDate} from '../api';
 
-type Trigger='message.received'|'message.delivery.updated'|'call.ended'|'call.report.ready';
+type Trigger='message.received'|'message.delivery.updated'|'call.ended'|'call.report.ready'|
+ 'call.ai.insight.detected'|'call.voicemail.new'|'call.voicemail.read'|
+ 'call.voicemail.deleted'|'call.receptionist.scheduling_issue';
 type Action='internal'|'webhook'|'whatsapp';
 type Form={
  title:string;trigger_type:Trigger;match_mode:'any'|'equals'|'contains';match_text:string;
@@ -19,7 +21,21 @@ const triggers=[
  {value:'message.received',label:'Receber uma resposta no WhatsApp'},
  {value:'message.delivery.updated',label:'Receber um status de entrega'},
  {value:'call.ended',label:'Uma chamada ser encerrada'},
- {value:'call.report.ready',label:'O relatório de uma chamada ficar disponível'}
+ {value:'call.report.ready',label:'O relatório de uma chamada ficar disponível'},
+ {value:'call.ai.insight.detected',label:'A GoTo identificar um insight de IA'},
+ {value:'call.voicemail.new',label:'Chegar um novo recado de voz'},
+ {value:'call.voicemail.read',label:'Um recado de voz ser ouvido'},
+ {value:'call.voicemail.deleted',label:'Um recado de voz ser excluído'},
+ {value:'call.receptionist.scheduling_issue',label:'A recepcionista IA não concluir um agendamento'}
+] as const;
+const aiInsights=[
+ {code:'AI_INSIGHT_APPOINTMENT_OPPORTUNITY_DETECTED',label:'Oportunidade de agendamento'},
+ {code:'AI_INSIGHT_APPOINTMENT_SET_DETECTED',label:'Agendamento identificado'},
+ {code:'AI_INSIGHT_APPOINTMENT_MISSED_DETECTED',label:'Oportunidade de agendamento não aproveitada'},
+ {code:'AI_INSIGHT_SALE_PITCH_DETECTED',label:'Abordagem comercial'},
+ {code:'AI_INSIGHT_SALE_CLOSE_DETECTED',label:'Possível fechamento de venda'},
+ {code:'AI_INSIGHT_SALE_PITCH_FAILED_DETECTED',label:'Abordagem sem fechamento'},
+ {code:'AI_INSIGHT_PROFANITY_DETECTED',label:'Linguagem inadequada'}
 ] as const;
 const actions=[
  {value:'internal',label:'Registrar um aviso no BR Notify'},
@@ -29,7 +45,9 @@ const actions=[
 const examples=[
  {title:'Resposta recebida',description:'Registrar uma resposta específica do WhatsApp.',trigger:'message.received',action:'internal',mode:'equals',text:'2'},
  {title:'Acompanhar chamadas',description:'Registrar quando uma chamada terminar.',trigger:'call.report.ready',action:'internal',mode:'any',text:''},
- {title:'Informar meu sistema',description:'Acionar um webhook após uma resposta de WhatsApp.',trigger:'message.received',action:'webhook',mode:'any',text:''}
+ {title:'Informar meu sistema',description:'Acionar um webhook após uma resposta de WhatsApp.',trigger:'message.received',action:'webhook',mode:'any',text:''},
+ {title:'Oportunidade comercial',description:'Registrar oportunidade de agendamento identificada pela IA da GoTo.',trigger:'call.ai.insight.detected',action:'internal',mode:'equals',text:'AI_INSIGHT_APPOINTMENT_OPPORTUNITY_DETECTED'},
+ {title:'Novo recado de voz',description:'Registrar um aviso quando a GoTo informar novo recado.',trigger:'call.voicemail.new',action:'internal',mode:'any',text:''}
 ] as const;
 
 function fieldsFor(template:any):Array<{key:string;example:string}>{
@@ -155,6 +173,19 @@ export function WorkflowAutomations(){
       </select></label>
       {form.match_mode!=='any'&&<label className="field"><span>Texto da resposta</span><input required maxLength={200} value={form.match_text} onChange={e=>update('match_text',e.target.value)} placeholder="Ex.: REAGENDAR ou 2"/></label>}
      </>}
+     {form.trigger_type==='call.ai.insight.detected'&&<>
+      <label className="field"><span>Quais insights?</span><select value={form.match_mode}
+       onChange={e=>setForm(v=>({...v,match_mode:e.target.value as Form['match_mode'],match_text:e.target.value==='any'?'':v.match_text||aiInsights[0].code}))}>
+       <option value="any">Qualquer insight de IA disponível</option>
+       <option value="equals">Um insight específico</option>
+      </select></label>
+      {form.match_mode==='equals'&&<label className="field"><span>Tipo de insight</span>
+       <select required value={form.match_text} onChange={e=>update('match_text',e.target.value)}>
+        {aiInsights.map(x=><option value={x.code} key={x.code}>{x.label}</option>)}
+       </select>
+      </label>}
+      <p className="wf-hint">Os insights são gerados pela GoTo quando esse recurso está disponível na conta. Eles indicam um sinal, não uma garantia de resultado.</p>
+     </>}
      {form.trigger_type==='message.delivery.updated'&&<>
       <label className="field"><span>Qual resultado?</span><select value={form.match_mode} onChange={e=>setForm(v=>({...v,match_mode:e.target.value as Form['match_mode'],match_text:e.target.value==='any'?'':v.match_text||'FAILED'}))}>
        <option value="any">Qualquer mudança de entrega</option>
@@ -165,7 +196,7 @@ export function WorkflowAutomations(){
       </select></label>}
       <p className="wf-hint">Somente mensagens WhatsApp identificadas nos envios do BR Notify podem iniciar este fluxo.</p>
      </>}
-     {form.trigger_type.startsWith('call.')&&<p className="wf-hint">Uma chamada encerrada não significa necessariamente chamada perdida. Nesta etapa, o fluxo só pode registrar avisos ou avisar sistemas externos.</p>}
+     {form.trigger_type.startsWith('call.')&&<p className="wf-hint">Sinais de telefonia geram avisos ou notificações a sistemas externos. O BR Notify não presume que uma ligação encerrada foi perdida e não envia automaticamente WhatsApp por esses gatilhos.</p>}
      
     </section>
     <div className="wf-connector"><span/></div>
@@ -222,6 +253,7 @@ export function WorkflowAutomations(){
       failed:'Falha',unknown:'Indeterminada',cancelled:'Cancelada'
      } as Record<string,string>)[r.status]||r.status}</span></div>
      <p>{triggers.find(x=>x.value===r.event_type)?.label||r.event_type} · {fmtDate(r.created_at,true)}</p>
+     {r.signal_code&&<small>{aiInsights.find(x=>x.code===r.signal_code)?.label||r.signal_code}</small>}
      {r.result?.kind==='webhook'&&<small>Webhook colocado na fila de entrega.</small>}
      {r.result?.kind==='whatsapp'&&<small>WhatsApp colocado na fila de envio.</small>}
      {r.result?.kind==='internal'&&<small>{r.result.label}</small>}

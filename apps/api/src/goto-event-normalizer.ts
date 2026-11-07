@@ -23,7 +23,10 @@ const contentOf=(raw:unknown):Record<string,any>|null=>{
 const limited=(value:unknown,max=180):string|null=>typeof value==='string'&&value.length>0&&value.length<=max?value:null;
 const iso=(value:unknown):string=>{
  if(typeof value!=='string')return new Date().toISOString();
- const time=new Date(value);
+ // GoTo webhooks may contain RFC3339 timestamps with nanosecond precision.
+ // Normalize to JS milliseconds so replayed REPORT_SUMMARY_REVISION is deduplicated.
+ const normalized=value.replace(/([.][0-9]{3})[0-9]+Z$/i,'$1Z');
+ const time=new Date(normalized);
  return Number.isFinite(time.getTime())?time.toISOString():new Date().toISOString();
 };
 const digest=(s:string)=>crypto.createHash('sha256').update(s).digest('hex');

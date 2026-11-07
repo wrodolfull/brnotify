@@ -141,7 +141,11 @@ export async function processAutomationRun(){
      flow_id:row.flow_id,trigger_type:row.event_type,
      occurred_at:row.occurred_at,conversation_id:row.conversation_space_id,
      phone:row.event_type==='message.received'?phone:null,
-     message_text:row.event_type==='message.received'?String(row.metadata.text||'').slice(0,500):null
+     message_text:row.event_type==='message.received'?String(row.metadata.text||'').slice(0,500):null,
+     signal_code:row.event_type.startsWith('call.')&&typeof row.metadata?.signal_code==='string'
+      ?row.metadata.signal_code.slice(0,100):null,
+     signal_group:row.event_type.startsWith('call.')&&typeof row.metadata?.signal_group==='string'
+      ?row.metadata.signal_group.slice(0,40):null
     }};
     const queued=await client.query(
      `insert into outbound_webhook_deliveries(tenant_id,endpoint_id,event_id,event_type,payload)

@@ -24,7 +24,7 @@ export async function activateCallMonitoring(tenantId:string){
   `insert into goto_call_monitors(tenant_id,webhook_secret_hash,enabled,state_subscribed,report_subscription_id,channel_id,last_error)
    values($1,$2,false,false,null,null,null)
    on conflict(tenant_id) do update set webhook_secret_hash=excluded.webhook_secret_hash,
-    enabled=false,state_subscribed=false,report_subscription_id=null,channel_id=null,last_error=null,updated_at=now()`,
+    enabled=false,state_subscribed=false,report_subscription_id=null,report_revision_subscription_id=null,channel_id=null,last_error=null,updated_at=now()`,
   [tenantId,secretHash]
  );
  try{
@@ -56,9 +56,38 @@ export async function activateCallMonitoring(tenantId:string){
  }
 }
 
+/** Subscribe to revisions on the existing secured tenant channel without disturbing calls. */
+export async function enableCallIntelligence(tenantId:string){
+ const details=await query(
+  `select m.enabled,m.channel_id,m.report_revision_subscription_id,
+   c.account_key,c.call_scopes_granted
+   from goto_call_monitors m join goto_connections c on c.tenant_id=m.tenant_id
+   where m.tenant_id=$1`,[tenantId]
+ );
+ const m=details.rows[0];
+ if(!m?.enabled||!m.channel_id||!m.account_key||!m.call_scopes_granted)
+  throw new Error('Ative o monitoramento de chamadas e autorize telefonia antes de habilitar a inteligência.');
+ if(m.report_revision_subscription_id)
+  return {active:true,already_active:true};
+ const response=await gotoRequest(tenantId,'/call-events-report/v1/subscriptions',{
+  method:'POST',json:{
+   channelId:m.channel_id,eventTypes:['REPORT_SUMMARY_REVISION'],accountKeys:[m.account_key]
+  }
+ }) as {items?:Array<{id:string;eventTypes?:string[]}>};
+ const item=response.items?.find(x=>typeof x.id==='string'&&
+  (!x.eventTypes||x.eventTypes.includes('REPORT_SUMMARY_REVISION')));
+ if(!item)throw new Error('A GoTo não confirmou a assinatura de revisões dos relatórios.');
+ await query(
+  `update goto_call_monitors set report_revision_subscription_id=$2,
+   last_error=null,updated_at=now()
+   where tenant_id=$1 and enabled=true and channel_id=$3`,[tenantId,item.id,m.channel_id]
+ );
+ return {active:true,already_active:false};
+}
+
 export async function callMonitorStatus(tenantId:string){
  const [monitor,connection]=await Promise.all([
-  query('select enabled,channel_id,state_subscribed,report_subscription_id,last_error,updated_at from goto_call_monitors where tenant_id=$1',[tenantId]),
+  query('select enabled,channel_id,state_subscribed,report_subscription_id,report_revision_subscription_id,last_error,updated_at from goto_call_monitors where tenant_id=$1',[tenantId]),
   query('select account_key,call_scopes_granted from goto_connections where tenant_id=$1',[tenantId])
  ]);
  return {active:monitor.rows[0]?.enabled===true&&connection.rows[0]?.call_scopes_granted===true,
@@ -67,6 +96,7 @@ export async function callMonitorStatus(tenantId:string){
   channel_configured:!!monitor.rows[0]?.channel_id,
   state_subscribed:monitor.rows[0]?.state_subscribed===true,
   report_subscribed:!!monitor.rows[0]?.report_subscription_id,
+  intelligence_active:!!monitor.rows[0]?.report_revision_subscription_id&&monitor.rows[0]?.enabled===true,
   last_error:monitor.rows[0]?.last_error||null,
   updated_at:monitor.rows[0]?.updated_at||null
  };
