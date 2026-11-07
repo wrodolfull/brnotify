@@ -18,8 +18,10 @@ export const flowSchema=z.object({
 }).strict().superRefine((v,ctx)=>{
  const add=(message:string,path:string)=>ctx.addIssue({code:z.ZodIssueCode.custom,message,path:[path]});
  const inbound=v.trigger_type==='message.received';
- if(!inbound&&v.match_mode!=='any')add('Filtro de texto só é válido para mensagens recebidas.','match_mode');
- if(inbound&&v.match_mode!=='any'&&!v.match_text) add('Informe o texto da resposta.','match_text');
+ const delivery=v.trigger_type==='message.delivery.updated';
+ if(!inbound&&!delivery&&v.match_mode!=='any')add('Este evento não oferece filtros adicionais.','match_mode');
+ if(delivery&&v.match_mode==='contains')add('Para status de entrega, use comparação exata.','match_mode');
+ if((inbound||delivery)&&v.match_mode!=='any'&&!v.match_text)add('Informe o texto ou status esperado.','match_text');
  if(v.check_no_new_message&&(!inbound||v.delay_minutes<1))add('A verificação de novas respostas exige um gatilho de WhatsApp e uma espera.','check_no_new_message');
  if(v.action_type==='whatsapp'){
   if(!inbound)add('Envio automático pelo WhatsApp nesta etapa exige uma mensagem recebida como gatilho.','action_type');
@@ -36,9 +38,9 @@ export function matchesFlow(flow:Pick<FlowInput,'trigger_type'|'match_mode'|'mat
  if(event.event_type!==flow.trigger_type)return false;
  const metadata=event.metadata||{};
  if(flow.trigger_type==='message.received'&&metadata.channel!=='WHATSAPP')return false;
- if(flow.trigger_type==='message.delivery.updated'&&metadata.delivery==='DELIVERED')return false;
+ if(flow.trigger_type==='message.delivery.updated'&&metadata.channel&&metadata.channel!=='WHATSAPP')return false;
  if(flow.match_mode==='any')return true;
- const actual=String(metadata.text||'').trim().normalize('NFKC').toLocaleLowerCase('pt-BR');
+ const actual=String(flow.trigger_type==='message.delivery.updated'?metadata.delivery||'':metadata.text||'').trim().normalize('NFKC').toLocaleLowerCase('pt-BR');
  const expected=String(flow.match_text||'').trim().normalize('NFKC').toLocaleLowerCase('pt-BR');
  if(!expected)return false;
  return flow.match_mode==='equals'?actual===expected:actual.includes(expected);
