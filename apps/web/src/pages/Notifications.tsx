@@ -102,6 +102,13 @@ export function Notifications({initialMode='choose'}:{initialMode?:Mode}){
    else{setResult(response);setPreview(null);notify(response.queued+' mensagem(ns) adicionada(s) à fila.')}
   }catch(e:any){setError(e.message)}finally{setBusy(false)}
  }
+ async function cancelQueued(id:string){
+  if(!window.confirm('Cancelar esta mensagem programada?'))return;
+  try{
+   await api('/api/notifications/'+id+'/cancel',{method:'POST'});
+   notify('Mensagem cancelada.');history.refresh();
+  }catch(e:any){notify(e.message,'error')}
+ }
  const resetSheet=(nextFile:File|null)=>{setFile(nextFile);setPreview(null);setResult(null);setError('')};
  return <div className="notify-page">
   <PageTitle eyebrow="WHATSAPP" title={mode==='choose'?'Notificações':mode==='single'?'Enviar para uma pessoa':mode==='sheet'?'Enviar por planilha':'Histórico de notificações'}
@@ -203,6 +210,7 @@ export function Notifications({initialMode='choose'}:{initialMode?:Mode}){
       <p className="text-small">Programado para {fmtDate(m.scheduled_at,true)} · {m.origin==='reminder'?'Lembrete de compromisso':m.origin==='ivr'?'Integração / URA':'Envio manual'}</p>
       {m.error_description&&<p className="notify-alert">{m.error_description}</p>}
      </div>
+     {canEdit&&m.origin==='panel'&&m.status==='queued'&&<Button secondary onClick={()=>void cancelQueued(m.id)}>Cancelar envio</Button>}
     </div>)}</div>:!history.loading&&<Empty title="Nenhuma mensagem neste filtro" subtitle="Os envios programados e seus resultados aparecerão aqui."/>}
    <Pagination page={history.page} pages={history.data.pages} onChange={history.setPage}/>
   </Card>}
