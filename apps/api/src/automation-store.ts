@@ -113,7 +113,8 @@ export async function listRuns(tenantId:string,page:unknown,flowId:string|null){
  const [rows,n]=await Promise.all([
   query(`select r.id,r.flow_id,f.title as flow_title,r.status,r.due_at,r.reason,r.result,
     r.created_at,r.finished_at,e.event_type,e.occurred_at,
-    e.metadata->>'phone' as phone
+    e.metadata->>'phone' as phone,
+    e.metadata->>'signal_code' as signal_code
     from automation_runs r join automation_flows f on f.id=r.flow_id and f.tenant_id=r.tenant_id
     join integration_events e on e.id=r.event_id and e.tenant_id=r.tenant_id
     where r.tenant_id=$1 and ($2::uuid is null or r.flow_id=$2)
