@@ -28,10 +28,10 @@ export async function recordGotoEvent(tenantId:string,event:NormalizedGotoEvent,
      ended_at=coalesce(goto_call_conversations.ended_at,excluded.ended_at),
      updated_at=now()`,
     [tenantId,event.conversationId,event.direction,event.stateType,event.sequence,
-     event.sequence!>1,started,ended]
+     (event.sequence??1)>1,started,ended]
    );
   }
-  if(event.source==='call-events-report'&&event.conversationId){
+  if(event.type==='call.report.available'&&event.conversationId){
    await db.query(
     `insert into goto_call_conversations(tenant_id,conversation_space_id,report_status,report_due_at)
      values($1,$2,'pending',now())
