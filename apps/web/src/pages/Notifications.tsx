@@ -48,7 +48,7 @@ export function Notifications({initialMode='choose'}:{initialMode?:Mode}){
  const [busy,setBusy]=useState(false);
  const [status,setStatus]=useState('');
  const [historyRevision,setHistoryRevision]=useState(0);
- const history=useList('/api/notifications/history'+(status?'?status='+status:'')+'&revision='+historyRevision,mode==='history');
+ const history=useList('/api/notifications/history?revision='+historyRevision+(status?'&status='+status:''),mode==='history');
  const template=templates.find(x=>x.id===templateId);
  const fields=useMemo(()=>fieldsOf(template?.definition),[template]);
  const textFields=fields.filter(f=>f.kind==='text');
