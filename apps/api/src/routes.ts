@@ -9,6 +9,7 @@ import {segments} from './segments.js';
 import {phoneE164,toUTC,rebuildEvent,previewEventDelivery} from './time.js';
 import {oauthURL,exchangeCode,encrypt,getAccessToken,syncTemplates} from './goto.js';
 import {importHandler,downloadTemplate} from './imports.js';
+import {enqueuePanelNotification,panelBatch,panelHistory} from './panel-notifications.js';
 import {handleGotoWebhook} from './scheduler.js';
 import {env} from './config.js';
 import {listVisibleTenants,listTenantOptions} from './tenant-list.js';
@@ -371,6 +372,22 @@ router.post('/api/goto/templates/sync',tenant(true),activeTenant,wrap(async(req,
  await audit(req.tenantId!,req.actor!.id,'goto.templates_synced',{count});
  res.json({count});
 }));
+// Simple panel notifications do not create appointments/events.
+router.get('/api/notifications/templates',tenant(),wrap(async(req,res)=>{
+ const items=await query("select id,name,language_code,definition,variable_map from message_templates where tenant_id=$1 and status='APPROVED' order by name,language_code limit 200",[req.tenantId]);
+ res.json({items:items.rows});
+}));
+router.post('/api/notifications/send',tenant(true),activeTenant,wrap(async(req,res)=>{
+ const queued=await enqueuePanelNotification(req.tenantId!,req.body);
+ await audit(req.tenantId!,req.actor!.id,'notification.panel_queued',{id:queued.id});
+ res.status(202).json({...queued,notice:'Programado na fila, aguardando envio e confirmação da GoTo.'});
+}));
+router.get('/api/notifications/history',tenant(),wrap(async(req,res)=>{
+ res.json(await panelHistory(req.tenantId!,req.query.page,req.query.status?String(req.query.status):null));
+}));
+router.post('/api/notifications/batch/preview',tenant(true),activeTenant,upload.single('file'),wrap((req,res)=>panelBatch(req,res,true)));
+router.post('/api/notifications/batch',tenant(true),activeTenant,upload.single('file'),wrap((req,res)=>panelBatch(req,res,false)));
+
 router.get('/api/imports/template',tenant(),wrap(downloadTemplate));
 router.post('/api/imports/preview',tenant(true),activeTenant,upload.single('file'),wrap((req,res)=>importHandler(req,res,true)));
 router.post('/api/imports',tenant(true),activeTenant,upload.single('file'),wrap(async(req,res)=>{await importHandler(req,res,false);await audit(req.tenantId!,req.actor!.id,'import.completed');}));
