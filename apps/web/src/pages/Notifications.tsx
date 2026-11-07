@@ -87,7 +87,7 @@ export function Notifications({initialMode='choose'}:{initialMode?:Mode}){
   if(!template)return;
   const keys=['whatsapp','data_envio','hora_envio',...textFields.map(x=>x.key)];
   const escaped=keys.map(x=>'"'+x.replace(/"/g,'""')+'"').join(';');
-  const example=['+5511999999999','','',...textFields.map(x=>x.example||'VALOR')].map(x=>'"'+x.replace(/"/g,'""')+'"').join(';');
+  const example=['+5511999999999','','',...textFields.map(x=>/^[=+@-]/.test(x.example)?'VALOR':x.example||'VALOR')].map(x=>'"'+x.replace(/"/g,'""')+'"').join(';');
   const blob=new Blob(['\uFEFF'+escaped+'\r\n'+example+'\r\n'],{type:'text/csv;charset=utf-8'});
   const url=URL.createObjectURL(blob);
   const a=document.createElement('a');a.href=url;a.download='brnotify-envios.csv';a.click();URL.revokeObjectURL(url);
@@ -150,7 +150,7 @@ export function Notifications({initialMode='choose'}:{initialMode?:Mode}){
       <label><input type="radio" checked={sendTime==='later'} onChange={()=>setSendTime('later')}/> Escolher data e hora</label>
      </div>
      {sendTime==='later'&&<label className="field"><span>Data e hora do envio</span><input type="datetime-local" required value={schedule} onChange={e=>setSchedule(e.target.value)}/></label>}
-     <p className="muted">A mensagem entrará na fila de envio da GoTo. O status de entrega pode chegar depois.</p>
+     <p className="muted">O envio respeita o fuso horário do ambiente. A confirmação de entrega pode chegar depois.</p>
     </div>
     <ErrorHint error={error}/>
     <div className="notify-actions"><Button type="submit" disabled={busy||!mediaReady}>{busy?'Programando...':sendTime==='later'?'Programar mensagem':'Adicionar à fila'}</Button></div>
