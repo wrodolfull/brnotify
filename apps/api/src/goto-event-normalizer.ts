@@ -37,6 +37,7 @@ export function normalizeGotoEvent(input:unknown):NormalizedGotoEvent|null{
  if(source==='call-events'){
   const metadata=object(content?.metadata);
   const state=object(content?.state);
+  if(!metadata||!state)return null;
   const conversationId=limited(metadata?.conversationSpaceId,150);
   const stateId=limited(state?.id,150);
   const stateType=limited(state?.type,40);
