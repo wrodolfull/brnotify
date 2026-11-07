@@ -23,6 +23,7 @@ A navegação principal foi enxugada para Visão geral, Notificações, Contatos
 - `POST /api/notifications/batch/preview` — formulário multipart `file` + `template_id`, sem gravar.
 - `POST /api/notifications/batch` — mesmo formulário, programa as linhas validadas; devolve totais e erros individualizados.
 - `GET /api/notifications/history` — histórico combinado de mensagens do painel, da URA e dos lembretes, isolado por tenant.
+- `POST /api/notifications/:id/cancel` — cancela apenas mensagens do painel ainda na fila.
 
 ### Formato da planilha
 
