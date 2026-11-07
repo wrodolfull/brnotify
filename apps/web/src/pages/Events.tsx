@@ -87,8 +87,8 @@ export function Events(){
     ...(deliveryMode==='custom'?{custom_send_at:customSendAt,custom_template_id:customTemplateId}:{})
    })});
    const count=Number(result.reminders_scheduled||0);
-   if(count>0)notify('Evento criado. '+count+' disparo(s) programado(s).');
-   else notify('Evento criado, mas nenhum WhatsApp foi programado. Verifique as regras e o consentimento.','error');
+   if(count>0)notify('Compromisso criado. '+count+' disparo(s) programado(s).');
+   else notify('Compromisso criado, mas nenhum WhatsApp foi programado. Verifique as regras e o consentimento.','error');
    setModal(false);list.refresh();
   }catch(e:any){setError(e.message)}finally{setBusy(false)}
  }
@@ -100,21 +100,21 @@ export function Events(){
  }
  const activeMessages=notifications.filter(m=>m.schedule_revision===selected?.schedule_revision);
  return <>
-  <PageTitle eyebrow="AGENDAMENTOS" title="Eventos" subtitle="Registre compromissos e escolha quando o cliente receberá o WhatsApp."
-   action={canEdit?<NewButton label="Novo evento" onClick={openCreate}/>:null}/>
+  <PageTitle eyebrow="LEMBRETES" title="Compromissos" subtitle="Cadastre um compromisso e envie lembretes antes da data marcada."
+   action={canEdit?<NewButton label="Novo compromisso" onClick={openCreate}/>:null}/>
   <Card>
-   <div className="card-heading"><div><h2>Todos os eventos</h2><p>Ordenados pela data do compromisso</p></div><span className="toolbar-count">{list.data.total} eventos</span></div>
+   <div className="card-heading"><div><h2>Próximos compromissos</h2><p>Ordenados pela data do compromisso</p></div><span className="toolbar-count">{list.data.total} compromissos</span></div>
    {list.error&&<ErrorHint error={list.error}/>}
    {list.data.items.length?<div className="data-list">{list.data.items.map((e:any)=>
     <button className="data-row" key={e.id} onClick={()=>setSelected(e)}>
      <span className="event-icon"><CalendarDays size={20}/></span>
      <span className="row-main"><strong>{e.title}</strong><small>{e.contact_name} · {e.record_label||'Sem registro adicional'}</small></span>
      <span className="event-date">{fmtDate(e.starts_at,true)}</span><Status value={e.status}/><ChevronRight size={18}/>
-    </button>)}</div>:!list.loading&&<Empty title="Ainda não há eventos" subtitle="Cadastre um compromisso para iniciar os lembretes."/>}
+    </button>)}</div>:!list.loading&&<Empty title="Nenhum compromisso cadastrado" subtitle="Os lembretes serão programados a partir dos compromissos."/>}
    <Pagination page={list.page} pages={list.data.pages} onChange={list.setPage}/>
   </Card>
 
-  {modal&&<Modal title="Agendar evento" onClose={()=>setModal(false)}>
+  {modal&&<Modal title="Novo compromisso" onClose={()=>setModal(false)}>
    <form className="form-stack" onSubmit={save}>
     <label className="field"><span>Encontrar contato</span><div className="search-box"><Search size={17}/>
      <input placeholder="Buscar por nome ou telefone" value={search} onChange={e=>setSearch(e.target.value)}/></div></label>
@@ -126,38 +126,18 @@ export function Events(){
      <option value="">Nenhum registro</option>
      {records.map(r=><option key={r.id} value={r.id}>{r.label}</option>)}
     </select></label>
-    <div className="form-grid"><Input name="title" label="Título do evento" required placeholder="Ex.: Revisão anual"/>
-     <Input name="event_type" label="Tipo de lembrete" placeholder="Revisão"/></div>
+    <div className="form-grid"><Input name="title" label="Nome do compromisso" required placeholder="Ex.: Revisão anual"/>
+     <Input name="event_type" label="Categoria (opcional)" placeholder="Revisão"/></div>
     <label className="field"><span>Data e hora do compromisso *</span>
      <input name="starts_at" type="datetime-local" required value={eventStart} onChange={e=>setEventStart(e.target.value)}/>
     </label>
-    <div className="event-delivery-panel">
-     <h3>Quando enviar o WhatsApp?</h3>
-     <p className="muted">A data do compromisso não é necessariamente o horário do envio.</p>
-     <label className={'event-mode-option '+(deliveryMode==='automation'?'event-mode-active':'')}>
-      <input type="radio" name="delivery_option" value="automation" checked={deliveryMode==='automation'} onChange={()=>setDeliveryMode('automation')}/>
-      <span><strong>Usar regras de Automações</strong><small>Enviar antes do compromisso, conforme as regras e os templates configurados no ambiente.</small></span>
-     </label>
-     <label className={'event-mode-option '+(deliveryMode==='custom'?'event-mode-active':'')}>
-      <input type="radio" name="delivery_option" value="custom" checked={deliveryMode==='custom'} onChange={()=>setDeliveryMode('custom')}/>
-      <span><strong>Escolher data e hora do envio</strong><small>Programar um WhatsApp específico, inclusive para daqui a poucos minutos.</small></span>
-     </label>
-     {deliveryMode==='custom'&&<div className="event-custom-fields">
-      <label className="field"><span>Data e hora do disparo *</span>
-       <input type="datetime-local" required value={customSendAt} onChange={e=>setCustomSendAt(e.target.value)}/>
-      </label>
-      <label className="field"><span>Template aprovado *</span>
-       <select required value={customTemplateId} onChange={e=>setCustomTemplateId(e.target.value)}>
-        <option value="">Selecione o template do WhatsApp</option>
-        {templates.map(t=><option value={t.id} key={t.id}>{t.name} ({t.language_code})</option>)}
-       </select>
-      </label>
-      <p className="muted">O envio deve ocorrer antes do compromisso. O contato precisa ter consentimento registrado.</p>
-     </div>}
+    <div className="form-panel">
+     <h3>Lembretes automáticos</h3>
+     <p className="muted">O BR Notify usa os horários e modelos definidos nas regras de lembretes deste ambiente.</p>
     </div>
     {deliveryMode==='automation'&&<div className="form-panel">
      <label className="checkbox-row"><input type="checkbox" checked={overrides} onChange={e=>setOverrides(e.target.checked)}/>
-      Personalizar antecedência deste evento</label>
+      Personalizar os lembretes deste compromisso (opcional)</label>
      {overrides&&<div className="override-row">{slots.map((slot,i)=><div key={i} className="override-item">
       <label className="checkbox-row"><input type="checkbox" checked={slot.enabled}
        onChange={e=>setSlots(rows=>rows.map((r,j)=>i===j?{...r,enabled:e.target.checked}:r))}/>Lembrete {i+1}</label>
@@ -169,16 +149,16 @@ export function Events(){
         <option value="days">Dias antes</option><option value="weeks">Semanas antes</option><option value="months">Meses antes</option>
        </select></label>
       </div>}</div>)}</div>}
-     <p className="muted">Horário e template vêm das regras do ambiente; apenas a antecedência pode ser personalizada aqui.</p>
+     <p className="muted">Os horários e modelos continuam definidos nas regras do ambiente.</p>
     </div>}
     <div className="form-panel">
      <label className="checkbox-row"><input type="checkbox" name="confirmation_enabled"/> Solicitar confirmação do compromisso pelo WhatsApp</label>
      <p className="muted">A resposta exige um template apropriado e webhook INBOUND_MESSAGE ativo.</p>
     </div>
     <div className="event-preview" role="status" aria-live="polite">
-     <h3>Prévia dos disparos</h3>
+     <h3>Mensagens que serão programadas</h3>
      {!contactId||!eventStart||(deliveryMode==='custom'&&(!customSendAt||!customTemplateId))?
-      <p className="muted">Informe o contato, o compromisso e a opção de envio para visualizar o agendamento.</p>:
+      <p className="muted">Selecione o contato e a data do compromisso para consultar os lembretes.</p>:
       previewLoading?<p className="muted">Calculando horários de envio...</p>:
       previewError?<ErrorHint error={previewError}/>:
       preview?<><strong>{preview.reminders.length?preview.reminders.length+' WhatsApp(s) programado(s)':'Nenhum WhatsApp será programado'}</strong>
@@ -189,7 +169,7 @@ export function Events(){
       </>:<p className="muted">Carregando prévia...</p>}
     </div>
     <ErrorHint error={error}/>
-    <SubmitRow onCancel={()=>setModal(false)} busy={busy||(deliveryMode==='custom'&&(!preview?.can_schedule||previewLoading||!!previewError))} label="Criar evento"/>
+    <SubmitRow onCancel={()=>setModal(false)} busy={busy||(deliveryMode==='custom'&&(!preview?.can_schedule||previewLoading||!!previewError))} label="Criar compromisso"/>
    </form>
   </Modal>}
 
