@@ -155,13 +155,23 @@ export function WorkflowAutomations(){
       </select></label>
       {form.match_mode!=='any'&&<label className="field"><span>Texto da resposta</span><input required maxLength={200} value={form.match_text} onChange={e=>update('match_text',e.target.value)} placeholder="Ex.: REAGENDAR ou 2"/></label>}
      </>}
+     {form.trigger_type==='message.delivery.updated'&&<>
+      <label className="field"><span>Qual resultado?</span><select value={form.match_mode} onChange={e=>setForm(v=>({...v,match_mode:e.target.value as Form['match_mode'],match_text:e.target.value==='any'?'':v.match_text||'FAILED'}))}>
+       <option value="any">Qualquer mudança de entrega</option>
+       <option value="equals">Um status específico</option>
+      </select></label>
+      {form.match_mode==='equals'&&<label className="field"><span>Status da entrega</span><select value={form.match_text||'FAILED'} onChange={e=>update('match_text',e.target.value)}>
+       <option value="FAILED">Falhou</option><option value="DELIVERED">Entregue</option><option value="SENT">Enviado</option>
+      </select></label>}
+      <p className="wf-hint">Somente mensagens WhatsApp identificadas nos envios do BR Notify podem iniciar este fluxo.</p>
+     </>}
      {form.trigger_type.startsWith('call.')&&<p className="wf-hint">Uma chamada encerrada não significa necessariamente chamada perdida. Nesta etapa, o fluxo só pode registrar avisos ou avisar sistemas externos.</p>}
-     {form.trigger_type==='message.delivery.updated'&&<p className="wf-hint">Este gatilho acompanha mudanças no status de entrega do WhatsApp.</p>}
+     
     </section>
     <div className="wf-connector"><span/></div>
     <section className="wf-step">
      <div className="wf-step-heading"><span className="wf-step-number">2</span><div><h2>Aguardar...</h2><p>Escolha quanto tempo esperar antes de agir.</p></div></div>
-     <div className="wf-inline"><label className="field"><span>Tempo de espera em minutos</span><input type="number" required min={0} max={10080} value={form.delay_minutes} onChange={e=>update('delay_minutes',Number(e.target.value))}/></label>
+     <div className="wf-inline"><label className="field"><span>Tempo de espera em minutos</span><input type="number" required min={0} max={10080} value={form.delay_minutes} onChange={e=>setForm(v=>({...v,delay_minutes:Number(e.target.value),check_no_new_message:Number(e.target.value)>0?v.check_no_new_message:false}))}/></label>
       <p>Use 0 para agir assim que possível. Para 24 horas, informe 1440.</p></div>
     </section>
     <div className="wf-connector"><span/></div>
