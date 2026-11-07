@@ -77,6 +77,10 @@ jobs:
         env:
           CI_DATABASE_URL: postgresql://postgres:test@127.0.0.1:5432/brnotify_ci
         run: npx tsx apps/api/scripts/automation-engine-smoke.ts
+      - name: GoTo intelligence PostgreSQL integration test
+        env:
+          CI_DATABASE_URL: postgresql://postgres:test@127.0.0.1:5432/brnotify_ci
+        run: npx tsx apps/api/scripts/goto-intelligence-smoke.ts
       - name: Dispatch pacing PostgreSQL integration test
         env:
           CI_DATABASE_URL: postgresql://postgres:test@127.0.0.1:5432/brnotify_ci
