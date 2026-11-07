@@ -1,6 +1,7 @@
 import {query,pool} from './db.js';
 import {gotoRequest} from './goto.js';
 import {recordGotoEvent} from './goto-event-store.js';
+import {extractGotoReportSignals,assessCallAttention} from './goto-report-intelligence.js';
 
 type Report={
  accountKey?:string;conversationSpaceId?:string;
@@ -70,13 +71,19 @@ export async function processCallReportQueue(){
    stateType:null,sequence:null,accountKey:report.accountKey||null,
    metadata:{participant_count:summary.participant_count,classification:'not_classified'}
   },conn.rows[0].account_key);
+  // Revised reports can add insights after the call ends. Replaying is safe because
+  // the event journal deduplicates signals by their stable provider identities.
+  const signals=extractGotoReportSignals(report);
+  for(const signal of signals)await recordGotoEvent(item.tenant_id,signal.event,conn.rows[0].account_key);
+  const attention=assessCallAttention(report);
   await query(
    `update goto_call_conversations
     set report_status='complete',report_due_at=null,report_locked_at=null,report_last_error=null,
     direction=coalesce($2,direction),started_at=coalesce($3::timestamptz,started_at),
-    ended_at=coalesce($4::timestamptz,ended_at),summary=$5,updated_at=now()
-    where id=$1 and report_status='processing'`,
-   [item.id,report.direction||null,summary.call_created,summary.call_ended,JSON.stringify(summary)]
+    ended_at=coalesce($4::timestamptz,ended_at),summary=$5,
+    intelligence_checked_at=now(),intelligence_signal_count=$6,attention_level=$7,
+    updated_at=now() where id=$1 and report_status='processing'`,
+   [item.id,report.direction||null,summary.call_created,summary.call_ended,JSON.stringify(summary),signals.length,attention]
   );
  }catch(e){
   const detail=e instanceof Error?e.message:'Falha ao obter o relatório';
