@@ -2,6 +2,17 @@
 
 Plataforma de lembretes multitenant por WhatsApp, com integração GoTo Messaging API v2.
 
+## Notificações simples — etapa 0
+
+O menu **Notificações** permite escolher uma ação sem precisar entender a estrutura de Eventos:
+- **Enviar para uma pessoa:** modelo GoTo aprovado, contato autorizado e envio imediato ou agendado.
+- **Enviar usando uma planilha:** template aprovado, CSV/XLSX, horários opcionais por linha, validação antes de confirmar.
+- **Criar lembretes de compromissos:** mantém os lembretes antes de uma data real e as até três regras existentes.
+
+**Atividades** reúne o histórico de envios individuais, em lote, URA e lembretes. Nenhuma mensagem avulsa cria um compromisso fictício.
+
+Execute a migração **`database/010_panel_notifications.sql` após `009_ivr_key_no_expiration.sql`** antes da publicação desta etapa. Consulte [Etapa 0 — Notificações simples](docs/SIMPLE_NOTIFICATIONS.md) para deploy, API interna, limites, planilhas e testes.
+
 ## Estrutura
 - `apps/web`: frontend React + Vite, mobile-first, tema claro e sidebar preta.
 - `apps/api`: backend Express/TypeScript e worker de agendamentos independente.
