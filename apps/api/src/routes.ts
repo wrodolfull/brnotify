@@ -69,11 +69,14 @@ router.post('/api/webhooks/goto-calls/:tenantId/:secret',wrap(async(req,res)=>{
   return res.status(404).end();
  const secretHash=crypto.createHash('sha256').update(req.params.secret).digest('hex');
  const monitor=await query(
-  'select m.webhook_secret_hash,c.account_key from goto_call_monitors m join goto_connections c on c.tenant_id=m.tenant_id where m.tenant_id=$1',
+  'select m.webhook_secret_hash,m.enabled,c.account_key,c.call_scopes_granted from goto_call_monitors m join goto_connections c on c.tenant_id=m.tenant_id where m.tenant_id=$1',
   [parsed.data]
  );
  if(!monitor.rowCount||!crypto.timingSafeEqual(Buffer.from(secretHash),Buffer.from(monitor.rows[0].webhook_secret_hash)))
   return res.status(404).end();
+ // Stop ingesting when call permissions have been removed or monitoring is inactive.
+ // Still acknowledge old provider channels to avoid unbounded retry delivery.
+ if(!monitor.rows[0].call_scopes_granted)return res.status(204).end();
  // GoTo sends an empty request during notification channel provisioning.
  if(!req.body||typeof req.body!=='object'||!Object.keys(req.body).length)return res.status(204).end();
  const event=normalizeGotoEvent(req.body);
@@ -372,8 +375,12 @@ router.get('/api/goto/oauth/start',tenant(true),activeTenant,wrap(async(req,res)
 }));
 router.patch('/api/goto',tenant(true),activeTenant,wrap(async(req,res)=>{
  const input=z.object({account_key:z.string().regex(/^[0-9]{8,24}$/),from_touchpoint:z.string().regex(/^[0-9]{8,24}$/)}).parse(req.body);
+ const previous=await query('select account_key from goto_connections where tenant_id=$1',[req.tenantId]);
  const saved=await query('update goto_connections set account_key=$2,from_touchpoint=$3,updated_at=now() where tenant_id=$1 returning account_key,from_touchpoint',[req.tenantId,input.account_key,input.from_touchpoint]);
  if(!saved.rowCount)return res.status(409).json({error:'Conecte a conta GoTo antes de salvar'});
+ if(previous.rows[0]?.account_key&&previous.rows[0].account_key!==input.account_key){
+  await query("update goto_call_monitors set enabled=false,last_error='Conta GoTo alterada. Reconfigure o monitoramento de telefonia.',updated_at=now() where tenant_id=$1",[req.tenantId]);
+ }
  res.json(saved.rows[0]);
 }));
 router.get('/api/goto/calls/status',tenant(),wrap(async(req,res)=>{
