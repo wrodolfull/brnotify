@@ -132,27 +132,20 @@ router.delete('/api/members/:id',tenant(true),requireSuper,wrap(async(req,res)=>
 
 router.get('/api/dashboard',tenant(),wrap(async(req,res)=>{
  const t=req.tenantId!;
- const counts=await query("select count(*) filter(where status='scheduled')::int as scheduled,count(*) filter(where status='processing')::int as processing,count(*) filter(where status='sent')::int as sent,count(*) filter(where status='delivered')::int as delivered,count(*) filter(where status='failed')::int as failed,count(*) filter(where status='unknown')::int as unknown from scheduled_messages where tenant_id=$1",[t]);
+ const counts=await query(
+  "select count(*) filter(where status='scheduled')::int as scheduled,count(*) filter(where status='processing')::int as processing,count(*) filter(where status='sent')::int as sent,count(*) filter(where status='delivered')::int as delivered,count(*) filter(where status='failed')::int as failed,count(*) filter(where status='unknown')::int as unknown from (select status from scheduled_messages where tenant_id=$1 union all select case when status='queued' then 'scheduled' else status end from on_demand_messages where tenant_id=$1) messages",[t]);
  const [contacts,events,recent,trend,upcoming]=await Promise.all([
   query('select count(*)::int n from contacts where tenant_id=$1',[t]),
   query("select count(*)::int n from events where tenant_id=$1 and status='scheduled' and starts_at>now()",[t]),
-  query("select m.id,m.status,m.scheduled_at,m.error_description,c.name,e.title from scheduled_messages m join events e on e.id=m.event_id and e.tenant_id=m.tenant_id join contacts c on c.id=e.contact_id and c.tenant_id=m.tenant_id where m.tenant_id=$1 order by m.updated_at desc limit 8",[t]),
-  // Consulta de tendência validada em PostgreSQL pelo CI.
+  query(
+   "select id,status,scheduled_at,error_description,name,title from (select m.id,m.status,m.scheduled_at,m.error_description,c.name,e.title,m.updated_at from scheduled_messages m join events e on e.id=m.event_id and e.tenant_id=m.tenant_id join contacts c on c.id=e.contact_id and c.tenant_id=m.tenant_id where m.tenant_id=$1 union all select m.id,m.status,m.scheduled_for,m.error_description,m.recipient_name,coalesce(mt.name,'Mensagem WhatsApp'),m.updated_at from on_demand_messages m left join message_templates mt on mt.id=m.template_id and mt.tenant_id=m.tenant_id where m.tenant_id=$1) activity order by updated_at desc limit 8",[t]),
   loadDashboardTrend(t),
-  query(`
-    select m.id,m.scheduled_at,c.name,e.title
-    from scheduled_messages m
-    join events e on e.id=m.event_id and e.tenant_id=m.tenant_id
-    join contacts c on c.id=e.contact_id and c.tenant_id=m.tenant_id
-    where m.tenant_id=$1 and m.status='scheduled' and m.scheduled_at>=now()
-    order by m.scheduled_at asc limit 5
-  `,[t])
+  query(
+   "select id,scheduled_at,name,title from (select m.id,m.scheduled_at,c.name,e.title from scheduled_messages m join events e on e.id=m.event_id and e.tenant_id=m.tenant_id join contacts c on c.id=e.contact_id and c.tenant_id=m.tenant_id where m.tenant_id=$1 and m.status='scheduled' and m.scheduled_at>=now() union all select m.id,m.scheduled_for,m.recipient_name,coalesce(mt.name,'Mensagem WhatsApp') from on_demand_messages m left join message_templates mt on mt.id=m.template_id and mt.tenant_id=m.tenant_id where m.tenant_id=$1 and m.status='queued' and m.scheduled_for>=now()) upcoming order by scheduled_at asc limit 5",[t])
  ]);
- res.json({
-  messages:counts.rows[0],contacts:contacts.rows[0].n,events:events.rows[0].n,
-  recent:recent.rows,trend:trend.rows,upcoming:upcoming.rows
- });
+ res.json({messages:counts.rows[0],contacts:contacts.rows[0].n,events:events.rows[0].n,recent:recent.rows,trend:trend.rows,upcoming:upcoming.rows});
 }));
+
 router.get('/api/contacts',tenant(),wrap(async(req,res)=>{
  const p=pageParams(req.query.page),search=String(req.query.q||'').trim().slice(0,100);
  const pattern='%'+search.replace(/[%_\\]/g,'\\$&')+'%';
