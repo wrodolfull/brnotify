@@ -13,6 +13,7 @@ create table if not exists public.automation_flows (
  check_no_new_message boolean not null default false,
  action_type text not null check(action_type in ('internal','webhook','whatsapp')),
  action_label varchar(180) not null default 'Ação automática',
+ last_error varchar(250),
  endpoint_id uuid references public.outbound_webhook_endpoints(id) on delete set null,
  template_id uuid references public.message_templates(id) on delete set null,
  template_variables jsonb not null default '{}'::jsonb,
