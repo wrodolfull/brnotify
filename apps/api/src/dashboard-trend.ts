@@ -11,21 +11,26 @@ export const DASHBOARD_TREND_SQL = `
     )::date AS series_day
     from zone z
   ),
+  dispatch_messages as (
+    select tenant_id,status,sent_at,updated_at from scheduled_messages where tenant_id=$1
+    union all
+    select tenant_id,status,sent_at,updated_at from on_demand_messages where tenant_id=$1
+  ),
   accepted as (
     select (m.sent_at at time zone t.timezone)::date AS series_day, count(*)::int AS total
-    from scheduled_messages m join tenants t on t.id=m.tenant_id
+    from dispatch_messages m join tenants t on t.id=m.tenant_id
     where m.tenant_id=$1 and m.sent_at>=now()-interval '15 days'
     group by 1
   ),
   delivered as (
     select (m.updated_at at time zone t.timezone)::date AS series_day, count(*)::int AS total
-    from scheduled_messages m join tenants t on t.id=m.tenant_id
+    from dispatch_messages m join tenants t on t.id=m.tenant_id
     where m.tenant_id=$1 and m.status='delivered' and m.updated_at>=now()-interval '15 days'
     group by 1
   ),
   failed as (
     select (m.updated_at at time zone t.timezone)::date AS series_day, count(*)::int AS total
-    from scheduled_messages m join tenants t on t.id=m.tenant_id
+    from dispatch_messages m join tenants t on t.id=m.tenant_id
     where m.tenant_id=$1 and m.status='failed' and m.updated_at>=now()-interval '15 days'
     group by 1
   )
