@@ -82,6 +82,7 @@ export function SettingsPage(){
  const media=useList('/api/goto/media');
  const testHistory=useList('/api/goto/templates/tests',role==='admin');
  const [conn,setConn]=useState<any>(null);
+ const [callMonitor,setCallMonitor]=useState<any>(null);
  const [busy,setBusy]=useState(false);
  const [error,setError]=useState('');
  const [selected,setSelected]=useState<any>(null);
@@ -94,11 +95,23 @@ export function SettingsPage(){
  const canEdit=role==='admin';
  const fields=selected?templateFields(selected.definition):[];
  const load=()=>api('/api/goto').then(setConn).catch((e:any)=>setError(e.message));
- useEffect(()=>{void load()},[api]);
+ const loadCalls=()=>api('/api/goto/calls/status').then(setCallMonitor).catch((e:any)=>setError(e.message));
+ useEffect(()=>{void load();void loadCalls()},[api]);
  useEffect(()=>{if(params.get('goto')==='connected')notify('GoTo conectada. Configure a conta e o remetente.')},[params]);
- async function connect(){
-  try{const result=await api('/api/goto/oauth/start');window.location.assign(result.url)}
-  catch(e:any){notify(e.message,'error')}
+ async function connect(withCalls=false){
+  try{
+   const result=await api('/api/goto/oauth/start'+(withCalls?'?calls=true':''));
+   window.location.assign(result.url);
+  }catch(e:any){notify(e.message,'error')}
+ }
+ async function activateCalls(){
+  setBusy(true);setError('');
+  try{
+   await api('/api/goto/calls/activate',{method:'POST'});
+   notify('Monitoramento de chamadas ativado.');
+   await loadCalls();
+  }catch(e:any){setError(e.message);await loadCalls()}
+  finally{setBusy(false)}
  }
  async function saveConnection(e:FormEvent<HTMLFormElement>){
   e.preventDefault();setBusy(true);setError('');
@@ -184,7 +197,7 @@ export function SettingsPage(){
       <span className="connection-indicator"/><div><strong>{conn.connected?'Conta conectada':'Nenhuma conta conectada'}</strong>
       <p>{conn.principal||'Autorize sua organização para começar.'}</p></div>
      </div>
-     {canEdit&&<Button onClick={connect} secondary>{conn.connected?'Reconectar GoTo':'Conectar conta GoTo'}</Button>}
+     {canEdit&&<Button onClick={()=>void connect(false)} secondary>{conn.connected?'Reconectar GoTo':'Conectar conta GoTo'}</Button>}
      {conn.connected&&<form className="form-stack integration-form" onSubmit={saveConnection}>
       <Input name="account_key" label="Account Key" required defaultValue={conn.account_key||''} key={'a'+conn.account_key}/>
       <Input name="from_touchpoint" label="ID do número WhatsApp na Meta" required defaultValue={conn.from_touchpoint||''} key={'f'+conn.from_touchpoint}/>
@@ -210,6 +223,28 @@ export function SettingsPage(){
     <p className="hint">Os arquivos são enviados como anexo multipart. Os botões e textos precisam existir previamente na definição do template aprovado.</p>
    </Card>
   </div>
+
+  <Card>
+   <div className="card-heading">
+    <div><h2>Chamadas do GoTo Connect</h2><p>Receba os estados das ligações e os relatórios após cada chamada, sem enviar mensagens automaticamente.</p></div>
+   </div>
+   {callMonitor===null?<p className="muted">Consultando a integração de telefonia...</p>:<>
+    <p className="muted">{callMonitor.active
+     ?'Monitoramento ativo. Novas chamadas serão registradas na área Atividades.'
+     :callMonitor.call_scopes_granted
+      ?'Conta autorizada. Ative o monitoramento para registrar novas chamadas.'
+      :'Autorize o acesso à telefonia para acompanhar chamadas e relatórios.'}</p>
+    {callMonitor.last_error&&<p className="notify-alert">{callMonitor.last_error}</p>}
+    {canEdit&&conn?.connected&&!callMonitor.active&&
+      <div className="button-row">
+       {!callMonitor.call_scopes_granted
+        ?<Button secondary onClick={()=>void connect(true)}>Autorizar telefonia</Button>
+        :<Button onClick={()=>void activateCalls()} disabled={busy||!callMonitor.account_configured}>{busy?'Ativando...':'Ativar monitoramento'}</Button>}
+      </div>}
+    {callMonitor.active&&<div className="bottom-hint"><span>Estados das chamadas e relatórios recebidos. As automações serão configuradas na próxima etapa.</span></div>}
+    <Link to="/activities" className="text-link">Consultar atividades</Link>
+   </>}
+  </Card>
 
   <div className="goto-catalog-banner">
    <div><strong>Modelos prontos para cadastrar na Meta</strong><span>12 sugestões por segmento, com variáveis, mídias, botões e mapeamento guiado.</span></div>

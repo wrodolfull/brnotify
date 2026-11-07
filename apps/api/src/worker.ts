@@ -3,6 +3,8 @@ import {processMessages} from './scheduler.js';
 import {processOnDemandMessages,cleanupOnDemandMessages} from './on-demand-worker.js';
 import {expireStaleScheduledMessages} from './send-pacing.js';
 import {rebuildEvent} from './time.js';
+import {processCallReportQueue,reclaimCallReportQueue} from './goto-call-report-worker.js';
+import {purgeOldGotoEvents} from './goto-event-store.js';
 import {processOutboundWebhooks,reclaimOutboundAfterCrash} from './outbound-webhooks.js';
 
 let running=true;
@@ -20,6 +22,7 @@ async function rebuildRules(){
  else await query('update rule_rebuild_queue set last_event_id=$2,updated_at=now() where tenant_id=$1',[tenant_id,ids.rows[ids.rows.length-1].id]);
 }
 async function maintenanceLoop(){
+ let lastEventPurge=0;
  while(running){
   try{
    // Resultado indeterminado NÃO autoriza reenvio após crash.
@@ -28,6 +31,12 @@ async function maintenanceLoop(){
    await cleanupOnDemandMessages();
    await rebuildRules();
    await reclaimOutboundAfterCrash();
+   await reclaimCallReportQueue();
+   await processCallReportQueue();
+   if(Date.now()-lastEventPurge>24*60*60*1000){
+    await purgeOldGotoEvents();
+    lastEventPurge=Date.now();
+   }
    await processOutboundWebhooks();
   }catch(e){
    console.error('[worker-maintenance]',e instanceof Error?e.message:'erro');

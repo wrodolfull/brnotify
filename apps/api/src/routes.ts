@@ -11,6 +11,9 @@ import {oauthURL,exchangeCode,encrypt,getAccessToken,syncTemplates} from './goto
 import {importHandler,downloadTemplate} from './imports.js';
 import {enqueuePanelNotification,panelBatch,panelHistory} from './panel-notifications.js';
 import {handleGotoWebhook} from './scheduler.js';
+import {normalizeGotoEvent} from './goto-event-normalizer.js';
+import {recordGotoEvent,listGoToEvents,listGoToCalls} from './goto-event-store.js';
+import {activateCallMonitoring,callMonitorStatus} from './goto-call-integration.js';
 import {env} from './config.js';
 import {listVisibleTenants,listTenantOptions} from './tenant-list.js';
 import {loadDashboardTrend} from './dashboard-trend.js';
@@ -52,20 +55,49 @@ router.post('/api/webhooks/goto/:secret',wrap(async(req,res)=>{
  const a=Buffer.from(req.params.secret||'');const b=Buffer.from(env.GOTO_WEBHOOK_SECRET);
  if(a.length!==b.length||!crypto.timingSafeEqual(a,b))return res.status(404).end();
  await handleGotoWebhook(req.body);
+ const normalized=normalizeGotoEvent(req.body);
+ if(normalized&&normalized.source==='inbox-notification'){
+  const account=await query('select tenant_id,account_key from goto_connections where account_key=$1',[normalized.accountKey]);
+  if(account.rowCount)await recordGotoEvent(account.rows[0].tenant_id,normalized,account.rows[0].account_key);
+ }
  res.status(204).end();
+}));
+// Unique per-tenant webhook secret, not a tenant ID in the payload, identifies the recipient.
+router.post('/api/webhooks/goto-calls/:tenantId/:secret',wrap(async(req,res)=>{
+ const parsed=uuid.safeParse(req.params.tenantId);
+ if(!parsed.success||typeof req.params.secret!=='string'||req.params.secret.length!==64)
+  return res.status(404).end();
+ const secretHash=crypto.createHash('sha256').update(req.params.secret).digest('hex');
+ const monitor=await query(
+  'select m.webhook_secret_hash,m.enabled,c.account_key,c.call_scopes_granted from goto_call_monitors m join goto_connections c on c.tenant_id=m.tenant_id where m.tenant_id=$1',
+  [parsed.data]
+ );
+ if(!monitor.rowCount||!crypto.timingSafeEqual(Buffer.from(secretHash),Buffer.from(monitor.rows[0].webhook_secret_hash)))
+  return res.status(404).end();
+ // Stop ingesting when call permissions have been removed or monitoring is inactive.
+ // Still acknowledge old provider channels to avoid unbounded retry delivery.
+ if(!monitor.rows[0].call_scopes_granted)return res.status(204).end();
+ // GoTo sends an empty request during notification channel provisioning.
+ if(!req.body||typeof req.body!=='object'||!Object.keys(req.body).length)return res.status(204).end();
+ if(!monitor.rows[0].enabled)return res.status(204).end();
+ const event=normalizeGotoEvent(req.body);
+ if(!event||!['call-events','call-events-report'].includes(event.source))
+  return res.status(204).end();
+ await recordGotoEvent(parsed.data,event,monitor.rows[0].account_key);
+ return res.status(204).end();
 }));
 router.get('/api/goto/callback',wrap(async(req,res)=>{
  const state=String(req.query.state||''),code=String(req.query.code||'');
  if(!state||!code)return res.redirect(env.WEB_URL+'/settings?goto=error');
  const stateHash=crypto.createHash('sha256').update(state).digest('hex');
- const match=await query('delete from oauth_states where state_hash=$1 and expires_at>now() returning tenant_id,user_id',[stateHash]);
+ const match=await query('delete from oauth_states where state_hash=$1 and expires_at>now() returning tenant_id,user_id,request_call_scopes',[stateHash]);
  if(!match.rowCount)return res.redirect(env.WEB_URL+'/settings?goto=state-error');
  try{
   const tokens=await exchangeCode(code);
   if(!tokens.refresh_token)throw new Error('Token de atualização ausente');
   await query(
-   "insert into goto_connections(tenant_id,access_token_enc,refresh_token_enc,expires_at,principal) values($1,$2,$3,$4,$5) on conflict(tenant_id) do update set access_token_enc=excluded.access_token_enc,refresh_token_enc=excluded.refresh_token_enc,expires_at=excluded.expires_at,principal=excluded.principal,updated_at=now()",
-   [match.rows[0].tenant_id,encrypt(tokens.access_token),encrypt(tokens.refresh_token),new Date(Date.now()+tokens.expires_in*1000),tokens.principal||null]
+   "insert into goto_connections(tenant_id,access_token_enc,refresh_token_enc,expires_at,principal,call_scopes_granted) values($1,$2,$3,$4,$5,$6) on conflict(tenant_id) do update set access_token_enc=excluded.access_token_enc,refresh_token_enc=excluded.refresh_token_enc,expires_at=excluded.expires_at,principal=excluded.principal,call_scopes_granted=excluded.call_scopes_granted,updated_at=now()",
+   [match.rows[0].tenant_id,encrypt(tokens.access_token),encrypt(tokens.refresh_token),new Date(Date.now()+tokens.expires_in*1000),tokens.principal||null,match.rows[0].request_call_scopes]
   );
   await audit(match.rows[0].tenant_id,match.rows[0].user_id,'goto.connected');
   return res.redirect(env.WEB_URL+'/settings?goto=connected');
@@ -338,14 +370,34 @@ router.get('/api/goto',tenant(),wrap(async(req,res)=>{
 }));
 router.get('/api/goto/oauth/start',tenant(true),activeTenant,wrap(async(req,res)=>{
  const state=crypto.randomBytes(32).toString('hex'),hash=crypto.createHash('sha256').update(state).digest('hex');
- await query("insert into oauth_states(state_hash,tenant_id,user_id,expires_at) values($1,$2,$3,now()+interval '10 minutes')",[hash,req.tenantId,req.actor!.id]);
- res.json({url:oauthURL(state)});
+ const withCalls=req.query.calls==='true';
+ await query("insert into oauth_states(state_hash,tenant_id,user_id,expires_at,request_call_scopes) values($1,$2,$3,now()+interval '10 minutes',$4)",[hash,req.tenantId,req.actor!.id,withCalls]);
+ res.json({url:oauthURL(state,withCalls)});
 }));
 router.patch('/api/goto',tenant(true),activeTenant,wrap(async(req,res)=>{
  const input=z.object({account_key:z.string().regex(/^[0-9]{8,24}$/),from_touchpoint:z.string().regex(/^[0-9]{8,24}$/)}).parse(req.body);
+ const previous=await query('select account_key from goto_connections where tenant_id=$1',[req.tenantId]);
  const saved=await query('update goto_connections set account_key=$2,from_touchpoint=$3,updated_at=now() where tenant_id=$1 returning account_key,from_touchpoint',[req.tenantId,input.account_key,input.from_touchpoint]);
  if(!saved.rowCount)return res.status(409).json({error:'Conecte a conta GoTo antes de salvar'});
+ if(previous.rows[0]?.account_key&&previous.rows[0].account_key!==input.account_key){
+  await query("update goto_call_monitors set enabled=false,last_error='Conta GoTo alterada. Reconfigure o monitoramento de telefonia.',updated_at=now() where tenant_id=$1",[req.tenantId]);
+ }
  res.json(saved.rows[0]);
+}));
+router.get('/api/goto/calls/status',tenant(),wrap(async(req,res)=>{
+ res.json(await callMonitorStatus(req.tenantId!));
+}));
+router.post('/api/goto/calls/activate',tenant(true),activeTenant,wrap(async(req,res)=>{
+ const result=await activateCallMonitoring(req.tenantId!);
+ await audit(req.tenantId!,req.actor!.id,'goto.call_monitoring_activated',{already_active:result.already_active});
+ res.status(result.already_active?200:201).json(result);
+}));
+router.get('/api/goto/calls',tenant(),wrap(async(req,res)=>{
+ res.json(await listGoToCalls(req.tenantId!,req.query.page));
+}));
+router.get('/api/goto/events',tenant(),wrap(async(req,res)=>{
+ const kind=z.enum(['all','call','message']).default('all').parse(req.query.kind);
+ res.json(await listGoToEvents(req.tenantId!,req.query.page,kind));
 }));
 router.post('/api/goto/notifications/subscribe',tenant(true),activeTenant,wrap(async(req,res)=>{
  const channelId=z.string().regex(/^Webhook\.[A-Za-z0-9-]{20,100}$/).parse(req.body.channel_id);

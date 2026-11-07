@@ -47,8 +47,10 @@ export function Notifications({initialMode='choose'}:{initialMode?:Mode}){
  const [error,setError]=useState('');
  const [busy,setBusy]=useState(false);
  const [status,setStatus]=useState('');
+ const [historyTab,setHistoryTab]=useState<'messages'|'calls'>('messages');
  const [historyRevision,setHistoryRevision]=useState(0);
  const history=useList('/api/notifications/history?revision='+historyRevision+(status?'&status='+status:''),mode==='history');
+ const callHistory=useList('/api/goto/calls',mode==='history'&&historyTab==='calls');
  const template=templates.find(x=>x.id===templateId);
  const fields=useMemo(()=>fieldsOf(template?.definition),[template]);
  const textFields=fields.filter(f=>f.kind==='text');
@@ -198,21 +200,48 @@ export function Notifications({initialMode='choose'}:{initialMode?:Mode}){
   </Card>}
 
   {mode==='history'&&<Card>
-   <div className="status-filters notify-filter">
-    {statuses.map(([value,label])=><button type="button" key={value} className={'filter-chip '+(status===value?'filter-active':'')} onClick={()=>{setStatus(value);history.setPage(1)}}>{label}</button>)}
+   <div className="notify-activity-tabs" role="group" aria-label="Tipo de atividade">
+    <button type="button" className={'filter-chip '+(historyTab==='messages'?'filter-active':'')}
+     onClick={()=>setHistoryTab('messages')}>Mensagens</button>
+    <button type="button" className={'filter-chip '+(historyTab==='calls'?'filter-active':'')}
+     onClick={()=>setHistoryTab('calls')}>Chamadas</button>
    </div>
-   <ErrorHint error={history.error}/>
-   {history.data.items.length?<div className="messages-list">{history.data.items.map((m:any)=>
-    <div className="message-row" key={m.id}>
-     <div className="message-content">
-      <div className="message-row-top"><strong>{m.contact_name}</strong><Status value={m.status}/></div>
-      <p className="muted">{m.title} · {m.phone}</p>
-      <p className="text-small">Programado para {fmtDate(m.scheduled_at,true)} · {m.origin==='reminder'?'Lembrete de compromisso':m.origin==='ivr'?'Integração / URA':'Envio manual'}</p>
-      {m.error_description&&<p className="notify-alert">{m.error_description}</p>}
-     </div>
-     {canEdit&&m.origin==='panel'&&m.status==='queued'&&<Button secondary onClick={()=>void cancelQueued(m.id)}>Cancelar envio</Button>}
-    </div>)}</div>:!history.loading&&<Empty title="Nenhuma mensagem neste filtro" subtitle="Os envios programados e seus resultados aparecerão aqui."/>}
-   <Pagination page={history.page} pages={history.data.pages} onChange={history.setPage}/>
+   {historyTab==='messages'?<>
+    <div className="status-filters notify-filter">
+     {statuses.map(([value,label])=><button type="button" key={value} className={'filter-chip '+(status===value?'filter-active':'')} onClick={()=>{setStatus(value);history.setPage(1)}}>{label}</button>)}
+    </div>
+    <ErrorHint error={history.error}/>
+    {history.data.items.length?<div className="messages-list">{history.data.items.map((m:any)=>
+     <div className="message-row" key={m.id}>
+      <div className="message-content">
+       <div className="message-row-top"><strong>{m.contact_name}</strong><Status value={m.status}/></div>
+       <p className="muted">{m.title} · {m.phone}</p>
+       <p className="text-small">Programado para {fmtDate(m.scheduled_at,true)} · {m.origin==='reminder'?'Lembrete de compromisso':m.origin==='ivr'?'Integração / URA':'Envio manual'}</p>
+       {m.error_description&&<p className="notify-alert">{m.error_description}</p>}
+      </div>
+      {canEdit&&m.origin==='panel'&&m.status==='queued'&&<Button secondary onClick={()=>void cancelQueued(m.id)}>Cancelar envio</Button>}
+     </div>)}</div>:!history.loading&&<Empty title="Nenhuma mensagem neste filtro" subtitle="Os envios programados e seus resultados aparecerão aqui."/>}
+    <Pagination page={history.page} pages={history.data.pages} onChange={history.setPage}/>
+   </>:<>
+    <p className="muted">Chamadas registradas pela integração com a GoTo. A classificação de chamadas perdidas e as ações automáticas serão adicionadas depois.</p>
+    <ErrorHint error={callHistory.error}/>
+    {callHistory.data.items.length?<div className="messages-list">{callHistory.data.items.map((call:any)=>
+     <div className="message-row" key={call.conversation_space_id}>
+      <div className="message-content">
+       <div className="message-row-top">
+        <strong>{call.direction==='INBOUND'?'Chamada recebida':call.direction==='OUTBOUND'?'Chamada realizada':'Chamada telefônica'}</strong>
+        <span className="status">{call.last_state==='ENDING'?'Encerrada':call.last_state==='ACTIVE'?'Em andamento':call.last_state==='STARTING'?'Iniciada':'Registrada'}</span>
+       </div>
+       <p className="muted">{call.summary?.external_number||'Número não identificado'} · {fmtDate(call.ended_at||call.started_at||call.updated_at,true)}</p>
+       <p className="text-small">{call.report_status==='complete'?'Relatório consultado':
+        call.report_status==='failed'?'Falha ao consultar o relatório':
+        ['pending','retry','processing'].includes(call.report_status)?'Aguardando relatório da GoTo':'Sem relatório disponível ainda'}</p>
+       {call.sequence_gap&&<p className="notify-alert">Foram detectadas lacunas na sequência dos eventos desta chamada. A análise poderá exigir reconciliação.</p>}
+      </div>
+     </div>)}</div>:!callHistory.loading&&<Empty title="Nenhuma chamada registrada" subtitle="Autorize e ative o monitoramento na área GoTo Connect para receber novos eventos."/>}
+    <Pagination page={callHistory.page} pages={callHistory.data.pages} onChange={callHistory.setPage}/>
+    <Link to="/settings" className="notify-text-button">Configurar telefonia</Link>
+   </>}
   </Card>}
  </div>;
 }
