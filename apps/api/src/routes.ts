@@ -9,6 +9,7 @@ import {segments} from './segments.js';
 import {phoneE164,toUTC,rebuildEvent,previewEventDelivery} from './time.js';
 import {oauthURL,exchangeCode,encrypt,getAccessToken,syncTemplates} from './goto.js';
 import {importHandler,downloadTemplate} from './imports.js';
+import {enqueuePanelNotification,panelBatch,panelHistory} from './panel-notifications.js';
 import {handleGotoWebhook} from './scheduler.js';
 import {env} from './config.js';
 import {listVisibleTenants,listTenantOptions} from './tenant-list.js';
@@ -131,27 +132,20 @@ router.delete('/api/members/:id',tenant(true),requireSuper,wrap(async(req,res)=>
 
 router.get('/api/dashboard',tenant(),wrap(async(req,res)=>{
  const t=req.tenantId!;
- const counts=await query("select count(*) filter(where status='scheduled')::int as scheduled,count(*) filter(where status='processing')::int as processing,count(*) filter(where status='sent')::int as sent,count(*) filter(where status='delivered')::int as delivered,count(*) filter(where status='failed')::int as failed,count(*) filter(where status='unknown')::int as unknown from scheduled_messages where tenant_id=$1",[t]);
+ const counts=await query(
+  "select count(*) filter(where status='scheduled')::int as scheduled,count(*) filter(where status='processing')::int as processing,count(*) filter(where status='sent')::int as sent,count(*) filter(where status='delivered')::int as delivered,count(*) filter(where status='failed')::int as failed,count(*) filter(where status='unknown')::int as unknown from (select status from scheduled_messages where tenant_id=$1 union all select case when status='queued' then 'scheduled' else status end from on_demand_messages where tenant_id=$1) messages",[t]);
  const [contacts,events,recent,trend,upcoming]=await Promise.all([
   query('select count(*)::int n from contacts where tenant_id=$1',[t]),
   query("select count(*)::int n from events where tenant_id=$1 and status='scheduled' and starts_at>now()",[t]),
-  query("select m.id,m.status,m.scheduled_at,m.error_description,c.name,e.title from scheduled_messages m join events e on e.id=m.event_id and e.tenant_id=m.tenant_id join contacts c on c.id=e.contact_id and c.tenant_id=m.tenant_id where m.tenant_id=$1 order by m.updated_at desc limit 8",[t]),
-  // Consulta de tendência validada em PostgreSQL pelo CI.
+  query(
+   "select id,status,scheduled_at,error_description,name,title from (select m.id,m.status,m.scheduled_at,m.error_description,c.name,e.title,m.updated_at from scheduled_messages m join events e on e.id=m.event_id and e.tenant_id=m.tenant_id join contacts c on c.id=e.contact_id and c.tenant_id=m.tenant_id where m.tenant_id=$1 union all select m.id,m.status,m.scheduled_for,m.error_description,m.recipient_name,coalesce(mt.name,'Mensagem WhatsApp'),m.updated_at from on_demand_messages m left join message_templates mt on mt.id=m.template_id and mt.tenant_id=m.tenant_id where m.tenant_id=$1) activity order by updated_at desc limit 8",[t]),
   loadDashboardTrend(t),
-  query(`
-    select m.id,m.scheduled_at,c.name,e.title
-    from scheduled_messages m
-    join events e on e.id=m.event_id and e.tenant_id=m.tenant_id
-    join contacts c on c.id=e.contact_id and c.tenant_id=m.tenant_id
-    where m.tenant_id=$1 and m.status='scheduled' and m.scheduled_at>=now()
-    order by m.scheduled_at asc limit 5
-  `,[t])
+  query(
+   "select id,scheduled_at,name,title from (select m.id,m.scheduled_at,c.name,e.title from scheduled_messages m join events e on e.id=m.event_id and e.tenant_id=m.tenant_id join contacts c on c.id=e.contact_id and c.tenant_id=m.tenant_id where m.tenant_id=$1 and m.status='scheduled' and m.scheduled_at>=now() union all select m.id,m.scheduled_for,m.recipient_name,coalesce(mt.name,'Mensagem WhatsApp') from on_demand_messages m left join message_templates mt on mt.id=m.template_id and mt.tenant_id=m.tenant_id where m.tenant_id=$1 and m.status='queued' and m.scheduled_for>=now()) upcoming order by scheduled_at asc limit 5",[t])
  ]);
- res.json({
-  messages:counts.rows[0],contacts:contacts.rows[0].n,events:events.rows[0].n,
-  recent:recent.rows,trend:trend.rows,upcoming:upcoming.rows
- });
+ res.json({messages:counts.rows[0],contacts:contacts.rows[0].n,events:events.rows[0].n,recent:recent.rows,trend:trend.rows,upcoming:upcoming.rows});
 }));
+
 router.get('/api/contacts',tenant(),wrap(async(req,res)=>{
  const p=pageParams(req.query.page),search=String(req.query.q||'').trim().slice(0,100);
  const pattern='%'+search.replace(/[%_\\]/g,'\\$&')+'%';
@@ -371,6 +365,29 @@ router.post('/api/goto/templates/sync',tenant(true),activeTenant,wrap(async(req,
  await audit(req.tenantId!,req.actor!.id,'goto.templates_synced',{count});
  res.json({count});
 }));
+// Simple panel notifications do not create appointments/events.
+router.get('/api/notifications/templates',tenant(),wrap(async(req,res)=>{
+ const items=await query("select id,name,language_code,definition,variable_map from message_templates where tenant_id=$1 and status='APPROVED' order by name,language_code limit 200",[req.tenantId]);
+ res.json({items:items.rows});
+}));
+router.post('/api/notifications/send',tenant(true),activeTenant,wrap(async(req,res)=>{
+ const queued=await enqueuePanelNotification(req.tenantId!,req.body);
+ await audit(req.tenantId!,req.actor!.id,'notification.panel_queued',{id:queued.id});
+ res.status(202).json({...queued,notice:'Programado na fila, aguardando envio e confirmação da GoTo.'});
+}));
+router.get('/api/notifications/history',tenant(),wrap(async(req,res)=>{
+ res.json(await panelHistory(req.tenantId!,req.query.page,req.query.status?String(req.query.status):null));
+}));
+router.post('/api/notifications/:id/cancel',tenant(true),activeTenant,wrap(async(req,res)=>{
+ const id=uuid.parse(req.params.id);
+ const result=await query("update on_demand_messages set status='cancelled',updated_at=now() where tenant_id=$1 and id=$2 and source='panel' and status='queued' returning id",[req.tenantId,id]);
+ if(!result.rowCount)return res.status(409).json({error:'Este envio não pode ser cancelado. Verifique se já foi processado.'});
+ await audit(req.tenantId!,req.actor!.id,'notification.panel_cancelled',{id});
+ res.json({id,status:'cancelled'});
+}));
+router.post('/api/notifications/batch/preview',tenant(true),activeTenant,upload.single('file'),wrap((req,res)=>panelBatch(req,res,true)));
+router.post('/api/notifications/batch',tenant(true),activeTenant,upload.single('file'),wrap((req,res)=>panelBatch(req,res,false)));
+
 router.get('/api/imports/template',tenant(),wrap(downloadTemplate));
 router.post('/api/imports/preview',tenant(true),activeTenant,upload.single('file'),wrap((req,res)=>importHandler(req,res,true)));
 router.post('/api/imports',tenant(true),activeTenant,upload.single('file'),wrap(async(req,res)=>{await importHandler(req,res,false);await audit(req.tenantId!,req.actor!.id,'import.completed');}));

@@ -55,7 +55,7 @@ export function Dashboard(){
  const hasChart=trend.some(x=>x.sent||x.delivered);
  const steps=[
   {label:'Contatos',note:'Na sua base',value:data?.contacts||0,icon:Users},
-  {label:'Eventos',note:'Agendados no futuro',value:data?.events||0,icon:CalendarDays},
+  {label:'Compromissos',note:'Agendados no futuro',value:data?.events||0,icon:CalendarDays},
   {label:'Lembretes',note:'Na fila de envio',value:m.scheduled,icon:Clock3},
   {label:'Entregas',note:'Confirmadas pela GoTo',value:m.delivered,icon:CheckCheck}
  ];
@@ -66,11 +66,11 @@ export function Dashboard(){
    <div>
     <div className="nd-overline"><span className="nd-overline-dot"/> VISÃO DA OPERAÇÃO <span className="nd-overline-divider">/</span> {currentDate}</div>
     <h1>Seu painel<span className="nd-title-period">.</span></h1>
-    <p>O que acontece com os lembretes de <strong>{tenantName}</strong>, em um só lugar.</p>
+    <p>Acompanhe os lembretes de <strong>{tenantName}</strong> e acesse suas notificações.</p>
    </div>
    <div className="nd-heading-actions">
     <button type="button" className="nd-refresh-button" onClick={()=>setRefresh(x=>x+1)} disabled={loading} aria-label="Atualizar painel" title="Atualizar painel"><RefreshCw size={17} className={loading?'spin':''}/></button>
-    {role==='admin'&&<Link className="nd-primary-button" to="/events"><CalendarClock size={17}/> Novo evento <ArrowUpRight size={16}/></Link>}
+    {role==='admin'&&<Link className="nd-primary-button" to="/notifications"><CalendarClock size={17}/> Nova notificação <ArrowUpRight size={16}/></Link>}
    </div>
   </header>
   {error&&<div className="inline-error" role="alert">{error} — exibindo os dados carregados anteriormente.</div>}
@@ -131,7 +131,7 @@ export function Dashboard(){
       </div>)}</div>
      :<div className="nd-small-empty"><CalendarClock size={31} strokeWidth={1.4}/><strong>Nada na fila por enquanto</strong><p>Os próximos lembretes aparecerão assim que forem programados.</p></div>
     }
-    <Link className="nd-view-all" to="/events">Ver eventos <ArrowUpRight size={16}/></Link>
+    <Link className="nd-view-all" to="/events">Ver compromissos <ArrowUpRight size={16}/></Link>
    </Card>
   </div>
 

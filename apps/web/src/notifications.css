@@ -1,0 +1,32 @@
+/* Etapa zero: mantém tipografia, cores e componentes existentes do BR Notify. */
+.notify-page{max-width:1120px}
+.notify-entry h2{font-size:21px;letter-spacing:-.6px;margin:0 0 7px;color:#20252d}
+.notify-entry>p{font-size:12px;color:#868f9c;margin:0 0 24px}
+.notify-choices{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.notify-choice{appearance:none;display:flex;flex-direction:column;align-items:flex-start;gap:11px;min-width:0;min-height:184px;padding:22px;text-align:left;background:#fff;border:1px solid #e7ebf1;border-radius:15px;cursor:pointer;color:#232832;text-decoration:none;transition:background .15s,border-color .15s}
+.notify-choice:hover:not(:disabled),.notify-choice:focus-visible{border-color:#83b0f1;background:#f7fbff;outline:none}
+.notify-choice:disabled{opacity:.65;cursor:not-allowed}
+.notify-choice strong{font-size:15px;line-height:1.45;letter-spacing:-.2px}
+.notify-choice span{font-size:12px;color:#7c8796;line-height:1.7;flex:1}
+.notify-choice small{color:#327cf3;font-weight:700;font-size:11px}
+.notify-bottom-links{display:flex;gap:12px 23px;flex-wrap:wrap;padding:19px 3px}
+.notify-bottom-links a,.notify-bottom-links button,.notify-text-button{font-size:12px;font-weight:700;color:#327cf3;background:none;border:0;padding:0;text-decoration:none;cursor:pointer}
+.notify-bottom-links a:hover,.notify-bottom-links button:hover,.notify-text-button:hover{text-decoration:underline}
+.notify-form-card{max-width:760px}
+.notify-section{display:flex;flex-direction:column;gap:13px;padding:0 0 25px;margin:0 0 25px;border-bottom:1px solid #eceff4}
+.notify-section h2{font-size:16px;letter-spacing:-.35px;margin:0;color:#242b35}
+.notify-section>p{font-size:12px;line-height:1.7;margin:0;color:#757f8c}
+.notify-section .field>span{font-size:12px;font-weight:700;color:#495361}
+.notify-section .field input,.notify-section .field select{height:46px;font-size:13px}
+.notify-section:last-of-type{border-bottom:0}
+.notify-radio-row{display:flex;gap:12px;flex-wrap:wrap}
+.notify-radio-row label{display:flex;align-items:center;gap:8px;border:1px solid #e4e8ef;border-radius:11px;padding:13px 15px;font-size:12px;color:#333b49;cursor:pointer}
+.notify-radio-row input{accent-color:#327cf3}
+.notify-actions{display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap}
+.notify-alert{border:1px solid #f2d1d1;background:#fff8f8;border-radius:9px;padding:10px 12px;font-size:12px;color:#a23b3b;line-height:1.5}
+.notify-preview{background:#f8fafc;border:1px solid #e6eaf0;border-radius:12px;padding:17px;display:flex;flex-direction:column;gap:10px}
+.notify-preview p{font-size:12px;line-height:1.6;margin:0}
+.notify-preview .notify-alert{margin:0}
+.notify-filter{margin-bottom:17px}
+@media(max-width:900px){.notify-choices{grid-template-columns:1fr}.notify-choice{min-height:auto;padding:18px;gap:8px}.notify-form-card{max-width:100%}}
+@media(max-width:600px){.notify-radio-row{flex-direction:column}.notify-radio-row label{width:100%}.notify-actions .button{width:100%}}
