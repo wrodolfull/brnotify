@@ -63,6 +63,13 @@ export async function processCallReportQueue(){
    report.accountKey!==conn.rows[0].account_key)
    throw Error('O relatório retornado não corresponde à conversa e à conta conectada.');
   const summary=summarizeCallReport(report);
+  await recordGotoEvent(item.tenant_id,{
+   source:'call-events-report',externalKey:item.conversation_space_id+':report-ready',
+   type:'call.report.ready',conversationId:item.conversation_space_id,
+   occurredAt:summary.call_ended||new Date().toISOString(),direction:report.direction||null,
+   stateType:null,sequence:null,accountKey:report.accountKey||null,
+   metadata:{participant_count:summary.participant_count,classification:'not_classified'}
+  },conn.rows[0].account_key);
   await query(
    `update goto_call_conversations
     set report_status='complete',report_due_at=null,report_locked_at=null,report_last_error=null,
@@ -71,13 +78,6 @@ export async function processCallReportQueue(){
     where id=$1 and report_status='processing'`,
    [item.id,report.direction||null,summary.call_created,summary.call_ended,JSON.stringify(summary)]
   );
-  await recordGotoEvent(item.tenant_id,{
-   source:'call-events-report',externalKey:item.conversation_space_id+':report-ready',
-   type:'call.report.ready',conversationId:item.conversation_space_id,
-   occurredAt:summary.call_ended||new Date().toISOString(),direction:report.direction||null,
-   stateType:null,sequence:null,accountKey:report.accountKey||null,
-   metadata:{participant_count:summary.participant_count,classification:'not_classified'}
-  },conn.rows[0].account_key);
  }catch(e){
   const detail=e instanceof Error?e.message:'Falha ao obter o relatório';
   const transient=/GoTo HTTP (429|404|408|5\d\d)|timeout|fetch failed|conexão/i.test(detail);
