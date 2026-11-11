@@ -57,13 +57,54 @@ export async function getAccessToken(tenantId:string){
  }catch(err){await client.query('rollback');throw err}
  finally{client.release()}
 }
+/** Avoid leaking the provider's raw HTML/error body or tenant IDs in logs. */
+export function gotoOperation(method:string,path:string){
+ const verb=method.toUpperCase();
+ if(verb==='POST'&&path.startsWith('/notification-channel/v1/channels/'))return 'criar canal de notificações';
+ if(verb==='POST'&&path==='/call-events/v1/subscriptions')return 'assinar eventos de telefonia';
+ if(verb==='POST'&&path==='/call-events-report/v1/subscriptions')return 'assinar relatórios de chamadas';
+ if(verb==='GET'&&path.startsWith('/call-events-report/v1/reports/'))return 'consultar relatório de chamadas';
+ if(verb==='GET'&&path.includes('/message-templates'))return 'sincronizar templates WhatsApp';
+ return 'acessar API GoTo';
+}
+export function describeGotoHttpFailure(method:string,path:string,status:number,contentType:string,body:string,cloudFrontRequestId:string|null=null){
+ const step=gotoOperation(method,path);
+ const isHtml=/html/i.test(contentType)||/^\s*(?:<!doctype|<html|<head)/i.test(body);
+ let code:string|null=null;
+ if(!isHtml&&/json/i.test(contentType)){
+  try{
+   const parsed=JSON.parse(body) as Record<string,unknown>;
+   if(typeof parsed.errorCode==='string'&&/^[A-Z0-9_]{2,80}$/.test(parsed.errorCode))code=parsed.errorCode;
+  }catch{/* Upstream may return invalid JSON; do not echo it. */}
+ }
+ const diagnostic=code?' Código GoTo: '+code+'.':
+  isHtml?' Resposta HTML do gateway/CDN, sem código JSON da API GoTo.':
+  ' Resposta sem código de erro GoTo reconhecido.';
+ // This is a provider request identifier, not a credential. Never include body or headers.
+ const requestId=cloudFrontRequestId&&/^[A-Za-z0-9_+=/-]{1,150}$/.test(cloudFrontRequestId)?
+  ' Referência CDN: '+cloudFrontRequestId+'.':'';
+ return 'GoTo HTTP '+status+' ao '+step+'.'+diagnostic+requestId;
+}
 export async function gotoRequest(tenantId:string,path:string,options:{method?:string;json?:unknown}={}){
  const {token}=await getAccessToken(tenantId);
+ const method=options.method||'GET';
  const response=await fetch('https://api.goto.com'+path,{
-  method:options.method||'GET',headers:{authorization:'Bearer '+token,...(options.json?{'content-type':'application/json'}:{})},
+  method,headers:{authorization:'Bearer '+token,accept:'application/json',...(options.json?{'content-type':'application/json'}:{})},
   body:options.json?JSON.stringify(options.json):undefined,signal:AbortSignal.timeout(20000)
  });
- if(!response.ok)throw new Error('GoTo HTTP '+response.status+': '+(await response.text()).slice(0,250));
+ if(!response.ok){
+  const contentType=response.headers.get('content-type')||'';
+  const cdnId=response.headers.get('x-amz-cf-id');
+  const body=(await response.text()).slice(0,4096);
+  const message=describeGotoHttpFailure(method,path,response.status,contentType,body,cdnId);
+  console.warn('[GoTo upstream]',JSON.stringify({
+   operation:gotoOperation(method,path),method,status:response.status,
+   contentType:contentType.slice(0,80),
+   responseKind:/html/i.test(contentType)||/^\s*(?:<!doctype|<html|<head)/i.test(body)?'html':'api',
+   ...(cdnId&&/^[A-Za-z0-9_+=/-]{1,150}$/.test(cdnId)?{cdnRequestId:cdnId}:{})
+  }));
+  throw new Error(message);
+ }
  return response.status===204?{}:response.json();
 }
 export async function syncTemplates(tenantId:string){
