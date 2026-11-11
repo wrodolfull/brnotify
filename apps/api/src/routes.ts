@@ -21,6 +21,7 @@ import {activateCallMonitoring,callMonitorStatus,enableCallIntelligence} from '.
 import {env} from './config.js';
 import {listVisibleTenants,listTenantOptions} from './tenant-list.js';
 import {loadDashboardTrend} from './dashboard-trend.js';
+import {memberInput,newPasswordInput,createTenantMember,resetTenantMemberPassword,finishFirstPasswordChange} from './member-accounts.js';
 
 export const router=Router();
 const upload=multer({storage:multer.memoryStorage(),limits:{fileSize:5*1024*1024,files:1},fileFilter:(_r,f,cb)=>{
@@ -115,6 +116,14 @@ router.get('/api/goto/callback',wrap(async(req,res)=>{
 }));
 router.use('/api',authenticate);
 router.get('/api/me',wrap(async(req,res)=>res.json(req.actor)));
+router.post('/api/auth/initial-password',wrap(async(req,res)=>{
+ if(!req.actor!.mustChangePassword)return res.status(409).json({error:'A conta não exige troca de senha'});
+ const input=newPasswordInput.parse(req.body);
+ const changed=await finishFirstPasswordChange(req.actor!.id,input.new_password);
+ if(!changed)return res.status(409).json({error:'A senha já foi atualizada'});
+ res.setHeader('Cache-Control','no-store');
+ return res.json({ok:true});
+}));
 router.get('/api/segments',(_req,res)=>res.json(segments));
 
 router.get('/api/tenants',wrap(async(req,res)=>{
@@ -167,18 +176,17 @@ router.get('/api/members',tenant(),requireSuper,wrap(async(req,res)=>{
  const total=await query('select count(*)::int n from tenant_members where tenant_id=$1',[req.tenantId]);
  res.json({items:items.rows,total:total.rows[0].n,page:p.page,pages:Math.ceil(total.rows[0].n/50)});
 }));
-router.post('/api/members',tenant(true),requireSuper,wrap(async(req,res)=>{
- const input=z.object({email:z.string().email().transform(v=>v.toLowerCase()),role:z.enum(['admin','viewer'])}).parse(req.body);
- const existing=await query('select user_id from tenant_members where lower(email)=$1 limit 1',[input.email]);
- let userId=existing.rows[0]?.user_id;
- if(!userId){
-  const invite=await supabase.auth.admin.inviteUserByEmail(input.email);
-  if(invite.error||!invite.data.user)return res.status(422).json({error:invite.error?.message||'Falha ao enviar convite Supabase'});
-  userId=invite.data.user.id;
- }
- await query('insert into tenant_members(tenant_id,user_id,email,role) values($1,$2,$3,$4) on conflict(tenant_id,user_id) do update set role=excluded.role',[req.tenantId,userId,input.email,input.role]);
- await audit(req.tenantId!,req.actor!.id,'member.invited',{email:input.email,role:input.role});
- res.status(201).json({email:input.email,role:input.role});
+router.post('/api/members',tenant(true),requireSuper,activeTenant,wrap(async(req,res)=>{
+ const input=memberInput.parse(req.body);
+ const member=await createTenantMember(req.tenantId!,req.actor!.id,input);
+ res.setHeader('Cache-Control','no-store');
+ res.status(201).json(member);
+}));
+router.post('/api/members/:id/reset-password',tenant(true),requireSuper,activeTenant,wrap(async(req,res)=>{
+ const result=await resetTenantMemberPassword(req.tenantId!,uuid.parse(req.params.id),req.actor!.id);
+ if(!result)return res.status(404).json({error:'Usuário não pertence ao ambiente'});
+ res.setHeader('Cache-Control','no-store');
+ return res.json(result);
 }));
 router.delete('/api/members/:id',tenant(true),requireSuper,wrap(async(req,res)=>{
  await query('delete from tenant_members where tenant_id=$1 and user_id=$2',[req.tenantId,uuid.parse(req.params.id)]);
