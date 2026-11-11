@@ -24,6 +24,10 @@ export function Events(){
  const [eventStart,setEventStart]=useState(''),[customSendAt,setCustomSendAt]=useState(''),[customTemplateId,setCustomTemplateId]=useState('');
  const [templates,setTemplates]=useState<{id:string;name:string;language_code:string}[]>([]);
  const [preview,setPreview]=useState<Preview|null>(null),[previewLoading,setPreviewLoading]=useState(false),[previewError,setPreviewError]=useState('');
+ const [createContact,setCreateContact]=useState(false);
+ const [newName,setNewName]=useState(''),[newPhone,setNewPhone]=useState(''),[newEmail,setNewEmail]=useState('');
+ const [newConsent,setNewConsent]=useState(true);
+ const [newConsentSource,setNewConsentSource]=useState('Autorização confirmada pelo atendente no cadastro');
 
  const overridePayload=()=>overrides&&deliveryMode==='automation'?
   Object.fromEntries(slots.map((slot,i)=>[String(i+1),slot])):null;
@@ -70,10 +74,34 @@ export function Events(){
   return()=>{active=false;clearTimeout(timer)};
  },[modal,api,contactId,eventStart,deliveryMode,customSendAt,customTemplateId,overrides,slots]);
 
+ async function saveNewContact(){
+  if(busy)return;
+  setBusy(true);setError('');
+  try{
+   const c=await api('/api/contacts',{method:'POST',body:JSON.stringify({
+    name:newName.trim(),phone:newPhone,email:newEmail,consent:newConsent,
+    consent_source:newConsent?newConsentSource.trim():null
+   })});
+   setContacts(old=>[c,...old.filter(x=>x.id!==c.id)]);
+   setContactId(c.id);setSearch('');setCreateContact(false);
+   setNewName('');setNewPhone('');setNewEmail('');
+   notify('Contato criado e selecionado para este compromisso.');
+  }catch(e:any){setError(e.message)}finally{setBusy(false)}
+ }
+ async function removeSelected(){
+  if(!selected||busy)return;
+  if(!window.confirm('Excluir definitivamente "'+selected.title+'"? Todos os disparos ainda agendados serão cancelados e o histórico específico deste compromisso será removido. Não é possível desfazer.'))return;
+  setBusy(true);setError('');
+  try{
+   const result=await api('/api/events/'+selected.id,{method:'DELETE'});
+   setSelected(null);list.refresh();
+   notify('Compromisso excluído. '+(result.cancelled_reminders||0)+' disparos agendados cancelados.');
+  }catch(e:any){setError(e.message)}finally{setBusy(false)}
+ }
  function openCreate(){
   setModal(true);setError('');setSearch('');setContactId('');setEventStart('');setCustomSendAt('');
   setCustomTemplateId('');setDeliveryMode('automation');setOverrides(false);setSlots(initialSlots);
-  setPreview(null);setPreviewError('');
+  setPreview(null);setPreviewError('');setCreateContact(false);setNewConsent(true);
  }
  async function save(e:FormEvent<HTMLFormElement>){
   e.preventDefault();setBusy(true);setError('');
@@ -118,6 +146,23 @@ export function Events(){
    <form className="form-stack" onSubmit={save}>
     <label className="field"><span>Encontrar contato</span><div className="search-box"><Search size={17}/>
      <input placeholder="Buscar por nome ou telefone" value={search} onChange={e=>setSearch(e.target.value)}/></div></label>
+    <div className="button-row" style={{justifyContent:'space-between',alignItems:'center'}}>
+     <strong>Selecionar ou cadastrar contato</strong>
+     <Button secondary disabled={busy} onClick={()=>{setCreateContact(x=>!x);setError('')}}>{createContact?'Fechar cadastro':'Criar novo contato'}</Button>
+    </div>
+    {createContact&&<div className="form-panel">
+     <h3>Novo contato</h3>
+     <div className="form-grid"><label className="field"><span>Nome completo</span><input value={newName} onChange={e=>setNewName(e.target.value)} placeholder="Nome do cliente"/></label>
+      <label className="field"><span>WhatsApp com DDD</span><input value={newPhone} onChange={e=>setNewPhone(e.target.value)} placeholder="(19) 99999-9999"/></label></div>
+     <label className="field"><span>E-mail (opcional)</span><input type="email" value={newEmail} onChange={e=>setNewEmail(e.target.value)}/></label>
+     <label className="checkbox-row"><input type="checkbox" checked={newConsent} onChange={e=>setNewConsent(e.target.checked)}/>
+      O contato autorizou receber mensagens via WhatsApp</label>
+     <p className="hint">Pré-selecionado para agilizar o cadastro manual. Mantenha marcado somente se a pessoa confirmou a autorização; desmarque caso contrário.</p>
+     {newConsent&&<label className="field"><span>Origem da autorização</span><input value={newConsentSource} onChange={e=>setNewConsentSource(e.target.value)} required maxLength={200}/></label>}
+     <div className="button-row"><Button secondary disabled={busy||newName.trim().length<2||newPhone.trim().length<10||newConsent&&!newConsentSource.trim()} onClick={()=>void saveNewContact()}>
+      {busy?'Salvando...':'Salvar e selecionar contato'}
+     </Button></div>
+    </div>}
     <label className="field"><span>Contato *</span><select name="contact_id" required value={contactId} onChange={e=>setContactId(e.target.value)}>
      <option value="" disabled>Selecione um contato</option>
      {contacts.map(c=><option value={c.id} key={c.id}>{c.name} · {c.phone}</option>)}
@@ -175,7 +220,7 @@ export function Events(){
 
   {selected&&<Modal title="Evento" onClose={()=>setSelected(null)}>
    <div className="detail-section">
-    <h2>{selected.title}</h2>
+    <h2>{selected.title}</h2><ErrorHint error={error}/>
     <div className="mini-line"><UserRound size={17}/>{selected.contact_name}</div>
     <div className="mini-line"><CalendarDays size={17}/>{fmtDate(selected.starts_at,true)} (compromisso)</div>
     <div className="mini-line">Status do evento: <Status value={selected.status}/></div>
@@ -199,6 +244,9 @@ export function Events(){
       <p className="event-preview-warning">Nenhum WhatsApp programado para este evento. Confira a data, o consentimento e as regras.</p>}
     </div>
    </div>
+   {canEdit&&<div className="form-footer">
+    <Button danger secondary disabled={busy} onClick={()=>void removeSelected()}>Excluir compromisso</Button>
+   </div>}
    {canEdit&&selected.status==='scheduled'&&<footer className="form-footer">
     <Button secondary onClick={()=>changeStatus('cancelled')}>Cancelar evento</Button>
     <Button onClick={()=>changeStatus('completed')}>Marcar concluído</Button>
