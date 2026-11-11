@@ -15,7 +15,7 @@ try{
  for(const path of [
   'database/001_init.sql','database/002_rebuild_queue.sql',
   'database/003_public_integrations.sql','database/004_unified_reports.sql','database/005_goto_rich_templates.sql',
-  'database/006_safe_message_dispatch.sql','database/007_ivr_on_demand.sql','database/008_event_custom_scheduling.sql','database/009_ivr_key_no_expiration.sql','database/010_panel_notifications.sql','database/011_goto_event_foundation.sql','database/012_automation_engine.sql','database/013_goto_call_intelligence.sql'
+  'database/006_safe_message_dispatch.sql','database/007_ivr_on_demand.sql','database/008_event_custom_scheduling.sql','database/009_ivr_key_no_expiration.sql','database/010_panel_notifications.sql','database/011_goto_event_foundation.sql','database/012_automation_engine.sql','database/013_goto_call_intelligence.sql','database/014_contact_lifecycle.sql'
  ]){
   await client.query(await fs.readFile(path,'utf8'));
   console.log('Migração SQL aprovada:',path);
