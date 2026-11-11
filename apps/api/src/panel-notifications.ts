@@ -20,7 +20,7 @@ type PanelInput=z.infer<typeof panelSendSchema>;
 async function prepare(tenantId:string,raw:unknown){
  const data=panelSendSchema.parse(raw);
  const [c,t,conn,zone]=await Promise.all([
-  query('select id,name,phone,consent,consent_source,opted_out_at from contacts where tenant_id=$1 and id=$2',[tenantId,data.contact_id]),
+  query('select id,name,phone,consent,is_active,consent_source,opted_out_at from contacts where tenant_id=$1 and id=$2',[tenantId,data.contact_id]),
   query("select id,name,language_code,status,definition,variable_map from message_templates where tenant_id=$1 and id=$2 and status='APPROVED'",[tenantId,data.template_id]),
   query('select 1 from goto_connections where tenant_id=$1 and account_key is not null and from_touchpoint is not null',[tenantId]),
   query('select timezone from tenants where id=$1 and status=\'active\'',[tenantId])
@@ -28,7 +28,7 @@ async function prepare(tenantId:string,raw:unknown){
  if(!zone.rowCount)throw new ApiOperationError(409,'O ambiente precisa estar ativo.');
  if(!c.rowCount)throw new ApiOperationError(404,'Contato não encontrado.');
  const contact=c.rows[0];
- if(!contact.consent||contact.opted_out_at||!contact.consent_source)
+ if(!contact.consent||contact.opted_out_at||!contact.consent_source||!contact.is_active)
   throw new ApiOperationError(422,'O contato precisa ter consentimento registrado e não pode estar descadastrado.');
  if(!t.rowCount)throw new ApiOperationError(422,'Selecione um modelo aprovado na GoTo.');
  if(!conn.rowCount)throw new ApiOperationError(409,'Conecte o WhatsApp da GoTo antes de programar envios.');
