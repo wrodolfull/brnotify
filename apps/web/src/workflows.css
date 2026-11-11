@@ -49,3 +49,10 @@
 .wf-check input{accent-color:#327cf3;margin-top:5px}
 .wf-actions{display:flex;justify-content:flex-end;gap:10px;margin:22px 0 35px}
 @media(max-width:760px){.wf-example-grid{grid-template-columns:1fr}.wf-list-item{align-items:flex-start;flex-direction:column;gap:12px}.wf-item-actions{width:100%}.wf-step{padding:18px}.wf-actions .button{flex:1}}
+
+.wf-example-heading{display:flex;align-items:center;justify-content:space-between;gap:18px;margin:0 0 12px}
+.wf-example-heading h2{margin:0 0 4px}
+.wf-example-heading p{margin:0;color:#87909c;font-size:12px}
+.wf-page .wf-example-heading+.card{margin-bottom:18px}
+.wf-item-actions .button-danger{border-color:#f0d5d5;color:#a53b3b}
+@media(max-width:760px){.wf-example-heading{align-items:flex-start;flex-direction:column;gap:7px}}
