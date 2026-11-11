@@ -36,3 +36,20 @@
 .event-notification-row strong{font-size:12px}
 .event-notification-row small{font-size:11px;color:#798697}
 @media(max-width:650px){.event-custom-fields{grid-template-columns:1fr}}
+
+
+/* Contact management: active/inactive tabs, per-page selection and import */
+.contact-tabs{display:flex;align-items:center;gap:20px;border-bottom:1px solid #edf0f3;margin:0 0 18px}
+.contact-tab{border:0;background:transparent;color:#687487;cursor:pointer;font-weight:600;font-size:13px;padding:10px 1px 13px;border-bottom:2px solid transparent}
+.contact-tab.active{color:#256ff3;border-color:#327cf3}
+.contact-selection-bar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:#f8fafc;padding:10px 12px;border-radius:12px;margin:12px 0;font-size:12px}
+.contact-selection-bar .checkbox-row{margin:0}
+.contact-row-check{flex:none;width:16px;height:16px;accent-color:#327cf3;cursor:pointer}
+.contact-row-open{display:flex;align-items:center;gap:14px;flex:1;min-width:0;border:0;background:none;color:inherit;text-align:left;cursor:pointer;padding:0}
+.contact-row-open .row-main{flex:1;min-width:0}
+.contact-row-open:hover strong{color:#327cf3}
+@media(max-width:760px){
+ .contact-row-open{flex-wrap:wrap}
+ .contact-row-open .consent-pill{margin-left:42px}
+ .contact-selection-bar .button{flex:1}
+}

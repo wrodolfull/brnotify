@@ -79,9 +79,9 @@ try{
  }
  const firstPage=await listVisibleTenants(superActor,1);
  const secondPage=await listVisibleTenants(superActor,2);
- assert.equal(firstPage.items.length,20);
+ assert.equal(firstPage.items.length,50);
  assert.ok(secondPage.items.length>=5);
- assert.equal(firstPage.total,extra+2); // existing fixture + 1 additional + 23
+ assert.equal(firstPage.total,extra+2); // two fixture environments + 53 extra
  assert.equal(firstPage.pages,2);
  const allOptions=await listTenantOptions(superActor);
  assert.equal(allOptions.items.length,extra+2);

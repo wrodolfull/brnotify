@@ -26,10 +26,10 @@ publicApiRouter.get('/contacts',requireScope('contacts:read'),wrap(async(req,res
  const like='%'+q.replace(/[%_\\]/g,'\\$&')+'%';
  const where="tenant_id=$1 and ($2::text='' or name ilike $3 or phone ilike $3)";
  const [items,count]=await Promise.all([
-  query('select id,external_id,name,phone,email,consent,opted_out_at,created_at,updated_at from contacts where '+where+' order by created_at desc limit 20 offset $4',[tenantId,q,like,p.offset]),
+  query('select id,external_id,name,phone,email,consent,opted_out_at,created_at,updated_at from contacts where '+where+' order by created_at desc limit 50 offset $4',[tenantId,q,like,p.offset]),
   query('select count(*)::int total from contacts where '+where,[tenantId,q,like])
  ]);
- res.json({items:items.rows,total:count.rows[0].total,page:p.page,pages:Math.ceil(count.rows[0].total/20)});
+ res.json({items:items.rows,total:count.rows[0].total,page:p.page,pages:Math.ceil(count.rows[0].total/50)});
 }));
 publicApiRouter.post('/contacts',requireScope('contacts:write'),wrap(async(req,res)=>{
  const v=contactSchema.parse(req.body);
@@ -76,10 +76,10 @@ publicApiRouter.get('/events',requireScope('events:read'),wrap(async(req,res)=>{
  const tenantId=req.integrationKey!.tenantId,p=pageParams(req.query.page);
  const status=req.query.status?z.enum(['scheduled','cancelled','completed']).parse(req.query.status):null;
  const [items,count]=await Promise.all([
-  query('select id,external_id,title,starts_at,status,confirmation_enabled,confirmation_status,updated_at from events where tenant_id=$1 and external_id is not null and ($2::text is null or status=$2) order by starts_at desc limit 20 offset $3',[tenantId,status,p.offset]),
+  query('select id,external_id,title,starts_at,status,confirmation_enabled,confirmation_status,updated_at from events where tenant_id=$1 and external_id is not null and ($2::text is null or status=$2) order by starts_at desc limit 50 offset $3',[tenantId,status,p.offset]),
   query('select count(*)::int total from events where tenant_id=$1 and external_id is not null and ($2::text is null or status=$2)',[tenantId,status])
  ]);
- res.json({items:items.rows,total:count.rows[0].total,page:p.page,pages:Math.ceil(count.rows[0].total/20)});
+ res.json({items:items.rows,total:count.rows[0].total,page:p.page,pages:Math.ceil(count.rows[0].total/50)});
 }));
 publicApiRouter.get('/events/:externalId',requireScope('events:read'),wrap(async(req,res)=>{
  const id=externalIdSchema.parse(req.params.externalId);
@@ -125,10 +125,10 @@ publicApiRouter.get('/messages',requireScope('messages:read'),wrap(async(req,res
   query(`select m.id,m.slot,m.scheduled_at,m.status,m.sent_at,m.error_code,e.external_id
    from scheduled_messages m join events e on e.id=m.event_id and e.tenant_id=m.tenant_id
    where m.tenant_id=$1 and ($2::text is null or e.external_id=$2)
-   order by m.scheduled_at desc limit 20 offset $3`,[tenantId,ref,p.offset]),
+   order by m.scheduled_at desc limit 50 offset $3`,[tenantId,ref,p.offset]),
   query('select count(*)::int total from scheduled_messages m join events e on e.id=m.event_id and e.tenant_id=m.tenant_id where m.tenant_id=$1 and ($2::text is null or e.external_id=$2)',[tenantId,ref])
  ]);
- res.json({items:items.rows,total:count.rows[0].total,page:p.page,pages:Math.ceil(count.rows[0].total/20)});
+ res.json({items:items.rows,total:count.rows[0].total,page:p.page,pages:Math.ceil(count.rows[0].total/50)});
 }));
 publicApiRouter.post('/imports',requireScope('imports:write'),requireScope('events:write'),requireScope('contacts:write'),wrap(async(req,res)=>{
  const tenantId=req.integrationKey!.tenantId;

@@ -210,8 +210,8 @@ reportRouter.get('/activity',wrap(async(req,res)=>{
  const ctx=await context(req),{filter,period,tenantId}=ctx;
  const base={tenantId,start:period.startISO,end:period.endISO,kind:filter.kind,status:filter.status,search:filter.q};
  const p=pageParams(filter.page);
- const [items,total]=await Promise.all([loadActivities(base,20,p.offset),countActivities(base)]);
- res.json({items:items.rows,total,page:p.page,pages:Math.ceil(total/20),limit:20});
+ const [items,total]=await Promise.all([loadActivities(base,p.limit,p.offset),countActivities(base)]);
+ res.json({items:items.rows,total,page:p.page,pages:Math.ceil(total/p.limit),limit:p.limit});
 }));
 reportRouter.get('/export',wrap(async(req,res)=>{
  const ctx=await context(req),{filter,period,tenantId}=ctx;

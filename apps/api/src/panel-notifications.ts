@@ -20,7 +20,7 @@ type PanelInput=z.infer<typeof panelSendSchema>;
 async function prepare(tenantId:string,raw:unknown){
  const data=panelSendSchema.parse(raw);
  const [c,t,conn,zone]=await Promise.all([
-  query('select id,name,phone,consent,consent_source,opted_out_at from contacts where tenant_id=$1 and id=$2',[tenantId,data.contact_id]),
+  query('select id,name,phone,consent,is_active,consent_source,opted_out_at from contacts where tenant_id=$1 and id=$2',[tenantId,data.contact_id]),
   query("select id,name,language_code,status,definition,variable_map from message_templates where tenant_id=$1 and id=$2 and status='APPROVED'",[tenantId,data.template_id]),
   query('select 1 from goto_connections where tenant_id=$1 and account_key is not null and from_touchpoint is not null',[tenantId]),
   query('select timezone from tenants where id=$1 and status=\'active\'',[tenantId])
@@ -28,7 +28,7 @@ async function prepare(tenantId:string,raw:unknown){
  if(!zone.rowCount)throw new ApiOperationError(409,'O ambiente precisa estar ativo.');
  if(!c.rowCount)throw new ApiOperationError(404,'Contato não encontrado.');
  const contact=c.rows[0];
- if(!contact.consent||contact.opted_out_at||!contact.consent_source)
+ if(!contact.consent||contact.opted_out_at||!contact.consent_source||!contact.is_active)
   throw new ApiOperationError(422,'O contato precisa ter consentimento registrado e não pode estar descadastrado.');
  if(!t.rowCount)throw new ApiOperationError(422,'Selecione um modelo aprovado na GoTo.');
  if(!conn.rowCount)throw new ApiOperationError(409,'Conecte o WhatsApp da GoTo antes de programar envios.');
@@ -90,10 +90,10 @@ export async function panelHistory(tenantId:string,page:unknown,status:string|nu
   throw new ApiOperationError(422,'Filtro de status inválido.');
  const sql="from (select m.id,m.status,m.scheduled_for as scheduled_at,m.recipient_name as contact_name,m.recipient_phone as phone,coalesce(mt.name,'Modelo GoTo') as title,m.source as origin,m.error_description from on_demand_messages m left join message_templates mt on mt.id=m.template_id and mt.tenant_id=m.tenant_id where m.tenant_id=$1 union all select s.id,s.status,s.scheduled_at,c.name,c.phone,e.title,'reminder' as origin,s.error_description from scheduled_messages s join events e on e.id=s.event_id and e.tenant_id=s.tenant_id join contacts c on c.id=e.contact_id and c.tenant_id=e.tenant_id where s.tenant_id=$1) activity where ($2::text is null or activity.status=$2)";
  const [rows,total]=await Promise.all([
-  query('select * '+sql+' order by scheduled_at desc,id desc limit 20 offset $3',[tenantId,status,p.offset]),
+  query('select * '+sql+' order by scheduled_at desc,id desc limit 50 offset $3',[tenantId,status,p.offset]),
   query('select count(*)::int as n '+sql,[tenantId,status])
  ]);
- return {items:rows.rows,total:total.rows[0].n,page:p.page,pages:Math.ceil(total.rows[0].n/20)};
+ return {items:rows.rows,total:total.rows[0].n,page:p.page,pages:Math.ceil(total.rows[0].n/50)};
 }
 
 function cell(value:any):string{

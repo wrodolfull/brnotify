@@ -57,10 +57,10 @@ mediaRouter.use(authenticate);
 mediaRouter.get('/',tenant(),wrap(async(req,res)=>{
  const page=pageParams(req.query.page);
  const [rows,count]=await Promise.all([
-  query('select id,label,original_name,content_type,size_bytes,created_at from goto_media_assets where tenant_id=$1 order by created_at desc limit 20 offset $2',[req.tenantId,page.offset]),
+  query('select id,label,original_name,content_type,size_bytes,created_at from goto_media_assets where tenant_id=$1 order by created_at desc limit 50 offset $2',[req.tenantId,page.offset]),
   query('select count(*)::int n from goto_media_assets where tenant_id=$1',[req.tenantId])
  ]);
- res.json({items:rows.rows,total:count.rows[0].n,page:page.page,pages:Math.ceil(count.rows[0].n/20)});
+ res.json({items:rows.rows,total:count.rows[0].n,page:page.page,pages:Math.ceil(count.rows[0].n/50)});
 }));
 mediaRouter.post('/',tenant(true),activeTenant,memory.single('file'),wrap(async(req,res)=>{
  if(!req.file)return res.status(422).json({error:'Selecione uma imagem, vídeo ou PDF'});
