@@ -11,7 +11,8 @@ import {oauthURL,exchangeCode,encrypt,getAccessToken,syncTemplates} from './goto
 import {importHandler,downloadTemplate} from './imports.js';
 import {enqueuePanelNotification,panelBatch,panelHistory} from './panel-notifications.js';
 import {handleGotoWebhook} from './scheduler.js';
-import {createFlow,updateFlow,setFlowStatus,listFlows,listRuns} from './automation-store.js';
+import {createFlow,updateFlow,setFlowStatus,deleteFlow,listFlows,listRuns} from './automation-store.js';
+import {disconnectGotoTenant} from './goto-disconnect.js';
 import {normalizeGotoEvent} from './goto-event-normalizer.js';
 import {recordGotoEvent,listGoToEvents,listGoToCalls} from './goto-event-store.js';
 import {activateCallMonitoring,callMonitorStatus,enableCallIntelligence} from './goto-call-integration.js';
@@ -385,6 +386,10 @@ router.patch('/api/goto',tenant(true),activeTenant,wrap(async(req,res)=>{
  }
  res.json(saved.rows[0]);
 }));
+// Revoke the local connection for this tenant even when the GoTo gateway is unavailable.
+router.delete('/api/goto',tenant(true),activeTenant,wrap(async(req,res)=>{
+ res.json(await disconnectGotoTenant(req.tenantId!,req.actor!.id));
+}));
 router.get('/api/goto/calls/status',tenant(),wrap(async(req,res)=>{
  res.json(await callMonitorStatus(req.tenantId!));
 }));
@@ -437,6 +442,14 @@ router.put('/api/automation-flows/:id',tenant(true),activeTenant,wrap(async(req,
  const flow=await updateFlow(req.tenantId!,req.params.id,req.body);
  await audit(req.tenantId!,req.actor!.id,'automation.updated',{id:flow.id});
  res.json(flow);
+}));
+router.delete('/api/automation-flows/:id',tenant(true),activeTenant,wrap(async(req,res)=>{
+ const result=await deleteFlow(req.tenantId!,req.params.id);
+ await audit(req.tenantId!,req.actor!.id,'automation.deleted',{
+  id:req.params.id,removed_runs:result.removed_runs,
+  cancelled_messages:result.cancelled_messages,cancelled_webhooks:result.cancelled_webhooks
+ });
+ res.json(result);
 }));
 router.post('/api/automation-flows/:id/status',tenant(true),activeTenant,wrap(async(req,res)=>{
  const status=z.enum(['active','paused']).parse(req.body?.status);

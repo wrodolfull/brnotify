@@ -54,3 +54,6 @@
 .integration-health-item{font-size:10px;line-height:1.5;padding:8px 11px;border-radius:8px;background:#f2f6fc;color:#55708f}
 .integration-health-warning{background:#fff7e8;color:#a47527}
 .integration-health-critical{background:#fff0ee;color:#b34e49}
+
+.goto-connection-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:12px 0}
+.goto-connection-actions .button-danger{border-color:#eed0d0;color:#a53b3b}

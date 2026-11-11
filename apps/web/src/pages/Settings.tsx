@@ -122,6 +122,20 @@ export function SettingsPage(){
   }catch(e:any){setError(e.message);await loadCalls()}
   finally{setBusy(false)}
  }
+ async function disconnect(){
+  if(!canEdit||busy||!conn?.connected)return;
+  const confirmed=window.confirm(
+   'Desconectar esta conta GoTo deste ambiente? Os lembretes e envios WhatsApp na fila serão cancelados, as automações serão pausadas e os tokens serão removidos do BR Notify. Esta ação não revoga automaticamente a autorização no portal GoTo. Deseja continuar?'
+  );
+  if(!confirmed)return;
+  setBusy(true);setError('');
+  try{
+   const result=await api('/api/goto',{method:'DELETE'});
+   await Promise.all([load(),loadCalls()]);
+   setSelected(null);setTestResult('');templates.refresh();testHistory.refresh();
+   notify('Conexão GoTo removida do BR Notify. '+result.cancelled_reminders+' lembretes e '+result.cancelled_direct+' envios na fila cancelados.');
+  }catch(e:any){setError(e.message)}finally{setBusy(false)}
+ }
  async function saveConnection(e:FormEvent<HTMLFormElement>){
   e.preventDefault();setBusy(true);setError('');
   const values=new FormData(e.currentTarget);
@@ -206,7 +220,11 @@ export function SettingsPage(){
       <span className="connection-indicator"/><div><strong>{conn.connected?'Conta conectada':'Nenhuma conta conectada'}</strong>
       <p>{conn.principal||'Autorize sua organização para começar.'}</p></div>
      </div>
-     {canEdit&&<Button onClick={()=>void connect(false)} secondary>{conn.connected?'Reconectar GoTo':'Conectar conta GoTo'}</Button>}
+     {canEdit&&<div className="goto-connection-actions">
+      <Button onClick={()=>void connect(false)} disabled={busy} secondary>{conn.connected?'Reconectar GoTo':'Conectar conta GoTo'}</Button>
+      {conn.connected&&<Button danger secondary disabled={busy} onClick={()=>void disconnect()}>Desconectar GoTo</Button>}
+     </div>}
+     {conn.connected&&canEdit&&<p className="hint">Desconectar remove as credenciais GoTo deste ambiente, pausa automações e cancela envios pendentes. Para revogar também a autorização no provedor, remova o acesso diretamente na sua conta GoTo.</p>}
      {conn.connected&&<form className="form-stack integration-form" onSubmit={saveConnection}>
       <Input name="account_key" label="Account Key" required defaultValue={conn.account_key||''} key={'a'+conn.account_key}/>
       <Input name="from_touchpoint" label="ID do número WhatsApp na Meta" required defaultValue={conn.from_touchpoint||''} key={'f'+conn.from_touchpoint}/>
