@@ -16,10 +16,9 @@ function cell(v:unknown):string{
  if(typeof v==='object'&&v!==null){
   if('text' in v)return String((v as {text:unknown}).text||'').trim();
   if('richText' in v)return String((v as {richText:{text:string}[]}).richText.map(x=>x.text).join('')).trim();
-  if('result' in v)return String((v as {result:unknown}).result??'').trim();
-  // Do not evaluate spreadsheet formulas. A number must be stored as a cell
-  // value, not an expression that is evaluated by the importer.
+  // Do not evaluate formulas, even when the workbook also carries a cached result.
   if('formula' in v)throw new Error('Fórmulas não são permitidas nos dados do contato');
+  if('result' in v)return String((v as {result:unknown}).result??'').trim();
   return '';
  }
  return String(v).trim();
