@@ -2,9 +2,10 @@ import type {Request,Response,NextFunction} from 'express';
 import {createClient} from '@supabase/supabase-js';
 import {env} from './config.js';
 import {query} from './db.js';
+import {needsPasswordChange,mayAccessDuringPasswordChange} from './password-policy.js';
 
 export const supabase=createClient(env.SUPABASE_URL,env.SUPABASE_SERVICE_ROLE_KEY,{auth:{autoRefreshToken:false,persistSession:false}});
-type Actor={id:string;email:string;superAdmin:boolean;memberships:{tenant_id:string;role:'admin'|'viewer';name:string;status:string}[]};
+type Actor={id:string;email:string;superAdmin:boolean;mustChangePassword:boolean;memberships:{tenant_id:string;role:'admin'|'viewer';name:string;status:string}[]};
 declare global {namespace Express {interface Request {actor?:Actor;tenantId?:string;tenantRole?:'admin'|'viewer'}}}
 export const wrap=(fn:(req:Request,res:Response,next:NextFunction)=>Promise<unknown>)=>(req:Request,res:Response,next:NextFunction)=>{Promise.resolve(fn(req,res,next)).catch(next);};
 export const authenticate=wrap(async(req,res,next)=>{
@@ -18,7 +19,12 @@ export const authenticate=wrap(async(req,res,next)=>{
     query('select m.tenant_id,m.role,t.name,t.segment,t.status from tenant_members m join tenants t on t.id=m.tenant_id where m.user_id=$1 order by t.name',[id])
   ]);
   if(!admin.rowCount && !member.rowCount)return res.status(403).json({error:'Acesso não provisionado pelo Super Admin'});
-  req.actor={id,email:data.user.email||'',superAdmin:!!admin.rowCount,memberships:member.rows};
+  req.actor={id,email:data.user.email||'',superAdmin:!!admin.rowCount,
+   mustChangePassword:needsPasswordChange(data.user.app_metadata),memberships:member.rows};
+  // Enforce at the API boundary, not only in the browser. app_metadata is
+  // server-controlled and refreshed via Supabase getUser on every request.
+  if(req.actor.mustChangePassword&&!mayAccessDuringPasswordChange(req.originalUrl.split('?')[0]))
+   return res.status(403).json({error:'Defina uma nova senha para continuar.',code:'PASSWORD_CHANGE_REQUIRED'});
   next();
 });
 export const requireSuper=(req:Request,res:Response,next:NextFunction)=>{
