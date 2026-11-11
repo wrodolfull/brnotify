@@ -33,9 +33,11 @@ export async function enqueueOnDemandMessage(tenantId:string,apiKeyId:string,bod
   // Serializes identical requests, including when several API replicas are active.
   await run('select pg_advisory_xact_lock(hashtext($1),hashtext($2))',[tenantId,fingerprint]);
   const suppression=await run(
-   "select opted_out_at from contacts where tenant_id=$1 and phone=$2 for update",
+   "select opted_out_at,is_active from contacts where tenant_id=$1 and phone=$2 for update",
    [tenantId,input.to]
   );
+  if(suppression.rows[0]?.is_active===false)
+   throw new ApiOperationError(409,'Contato inativo. Reative-o antes de programar mensagens.');
   if(suppression.rows[0]?.opted_out_at)
    throw new ApiOperationError(409,'Contato com opt-out registrado; novo consentimento precisa ser validado no painel.');
 
@@ -56,7 +58,7 @@ export async function enqueueOnDemandMessage(tenantId:string,apiKeyId:string,bod
     values($1,$2,$3,true,$4,now())
     on conflict(tenant_id,phone) do update set
       consent=true,consent_source=excluded.consent_source,consent_at=now(),updated_at=now()
-    where contacts.opted_out_at is null
+    where contacts.opted_out_at is null and contacts.is_active=true
     returning id,name`,
    [tenantId,input.name||'Cliente',input.to,input.consent.source]
   );
