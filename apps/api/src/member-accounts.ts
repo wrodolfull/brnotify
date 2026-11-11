@@ -34,12 +34,13 @@ export async function createTenantMember(tenantId:string,actorId:string,input:z.
   // "admin" cannot call this route. Reuse the same Auth identity, never its password.
   const privileges=await query(
    `select exists(select 1 from platform_admins where user_id=$1) as is_super,
-           exists(select 1 from tenant_members where user_id=$1 and tenant_id<>$2) as other_tenant`,
+           exists(select 1 from tenant_members where user_id=$1 and tenant_id<>$2) as other_tenant,
+           exists(select 1 from tenant_members where user_id=$1 and tenant_id=$2) as target_tenant`,
    [existingId,tenantId]
   );
   if(privileges.rows[0]?.is_super===true)
    throw new ApiOperationError(409,'Este e-mail pertence a um Super Admin da plataforma. Use uma conta separada para o usuário do ambiente.');
-  if(privileges.rows[0]?.other_tenant===true&&!input.allow_existing_membership)
+  if(privileges.rows[0]?.other_tenant===true&&privileges.rows[0]?.target_tenant!==true&&!input.allow_existing_membership)
    throw new ApiOperationError(409,'Este usuário já pertence a outro ambiente. Marque a confirmação para conceder acesso também ao ambiente selecionado.');
  }
  let userId=existingId;
