@@ -3,6 +3,7 @@ import {z} from 'zod';
 import {query,audit} from './db.js';
 import {supabase} from './auth.js';
 import {FORCE_PASSWORD_CHANGE,needsPasswordChange} from './password-policy.js';
+import {ApiOperationError} from './external-operations.js';
 
 export const memberInput=z.object({
  name:z.string().trim().min(2).max(120),
@@ -26,6 +27,19 @@ export async function createTenantMember(tenantId:string,actorId:string,input:z.
  // an existing account's password merely because they join another tenant.
  const existing=await query('select id from auth.users where lower(email)=$1 limit 1',[input.email]);
  const existingId: string|undefined=existing.rows[0]?.id;
+ if(existingId){
+  // A tenant manager must not accidentally re-use the platform owner's
+  // login or silently grant a tenant account access to a second company.
+  const privileges=await query(
+   `select exists(select 1 from platform_admins where user_id=$1) as is_super,
+           exists(select 1 from tenant_members where user_id=$1 and tenant_id<>$2) as other_tenant`,
+   [existingId,tenantId]
+  );
+  if(privileges.rows[0]?.is_super===true)
+   throw new ApiOperationError(409,'Este e-mail pertence a um Super Admin da plataforma. Use uma conta separada para o usuário do ambiente.');
+  if(privileges.rows[0]?.other_tenant===true)
+   throw new ApiOperationError(409,'Este e-mail já está vinculado a outra empresa. Use uma conta diferente para evitar acesso entre ambientes.');
+ }
  let userId=existingId;
  let temporaryPassword:string|undefined;
  if(!userId){

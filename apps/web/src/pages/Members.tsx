@@ -89,7 +89,7 @@ export function Members(){
      <option value="admin">Administrador — gerencia dados e integrações</option>
      <option value="viewer">Visualizador — somente leitura</option>
     </select></label>
-    <p className="hint">Se o e-mail for novo, o Supabase criará a conta sem SMTP e uma senha provisória será exibida uma única vez. Se já existir, apenas concederemos acesso ao ambiente.</p>
+    <p className="hint">Se o e-mail for novo, o Supabase criará a conta sem SMTP e uma senha provisória será exibida uma única vez. Contas de outros ambientes e contas Super Admin não podem ser reutilizadas. Para testar um novo acesso, utilize uma janela anônima: criar usuário não muda sua sessão de Super Admin.</p>
     <ErrorHint error={error}/>
     <SubmitRow busy={busy} label="Criar acesso" onCancel={close}/>
    </form>}
