@@ -8,7 +8,9 @@ import {ApiOperationError} from './external-operations.js';
 export const memberInput=z.object({
  name:z.string().trim().min(2).max(120),
  email:z.string().trim().email().transform(v=>v.toLowerCase()),
- role:z.enum(['admin','viewer'])
+ role:z.enum(['admin','viewer']),
+ // Explicit acknowledgement is mandatory when reusing an account that belongs to a different tenant.
+ allow_existing_membership:z.boolean().default(false)
 });
 export const newPasswordInput=z.object({
  new_password:z.string().min(12,'Use pelo menos 12 caracteres').max(128)
@@ -28,17 +30,18 @@ export async function createTenantMember(tenantId:string,actorId:string,input:z.
  const existing=await query('select id from auth.users where lower(email)=$1 limit 1',[input.email]);
  const existingId: string|undefined=existing.rows[0]?.id;
  if(existingId){
-  // A tenant manager must not accidentally re-use the platform owner's
-  // login or silently grant a tenant account access to a second company.
+  // Only the Super Admin can grant a new tenant membership; a tenant-level
+  // "admin" cannot call this route. Reuse the same Auth identity, never its password.
   const privileges=await query(
    `select exists(select 1 from platform_admins where user_id=$1) as is_super,
-           exists(select 1 from tenant_members where user_id=$1 and tenant_id<>$2) as other_tenant`,
+           exists(select 1 from tenant_members where user_id=$1 and tenant_id<>$2) as other_tenant,
+           exists(select 1 from tenant_members where user_id=$1 and tenant_id=$2) as target_tenant`,
    [existingId,tenantId]
   );
   if(privileges.rows[0]?.is_super===true)
    throw new ApiOperationError(409,'Este e-mail pertence a um Super Admin da plataforma. Use uma conta separada para o usuário do ambiente.');
-  if(privileges.rows[0]?.other_tenant===true)
-   throw new ApiOperationError(409,'Este e-mail já está vinculado a outra empresa. Use uma conta diferente para evitar acesso entre ambientes.');
+  if(privileges.rows[0]?.other_tenant===true&&privileges.rows[0]?.target_tenant!==true&&!input.allow_existing_membership)
+   throw new ApiOperationError(409,'Este usuário já pertence a outro ambiente. Marque a confirmação para conceder acesso também ao ambiente selecionado.');
  }
  let userId=existingId;
  let temporaryPassword:string|undefined;
@@ -65,7 +68,7 @@ export async function createTenantMember(tenantId:string,actorId:string,input:z.
   }
   throw error;
  }
- await audit(tenantId,actorId,existingId?'member.linked':'member.created',{email:input.email,role:input.role});
+ await audit(tenantId,actorId,existingId?'member.linked':'member.created',{email:input.email,role:input.role,existing_account:!!existingId});
  return {email:input.email,role:input.role,created:!existingId,temporary_password:temporaryPassword??null};
 }
 

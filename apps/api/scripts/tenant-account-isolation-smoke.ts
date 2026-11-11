@@ -32,19 +32,35 @@ try{
  assert.equal(tenantPermitted(ordinary,second,false),false);
  assert.equal(tenantPermitted(ordinary,second,true),false);
 
+ // Explicit opt-in is required to reuse an account across organizations.
  await assert.rejects(
-  createTenantMember(second,owner,{name:'Admin Teste',email:adminEmail,role:'admin'}),
-  /outra empresa/
+  createTenantMember(second,owner,{name:'Admin Teste',email:adminEmail,role:'viewer',allow_existing_membership:false}),
+  /Marque a confirmação/
  );
+ const other=await createTenantMember(second,owner,{
+  name:'Admin Teste',email:adminEmail,role:'viewer',allow_existing_membership:true
+ });
+ assert.equal(other.created,false);
+ assert.equal(other.temporary_password,null);
+ assert.equal((await query('select role from tenant_members where user_id=$1 and tenant_id=$2',[admin,first])).rows[0].role,'admin');
+ assert.equal((await query('select role from tenant_members where user_id=$1 and tenant_id=$2',[admin,second])).rows[0].role,'viewer');
+ const multiTenantActor={
+  superAdmin:false,
+  memberships:[{tenant_id:first,role:'admin' as const},{tenant_id:second,role:'viewer' as const}]
+ };
+ assert.equal(tenantPermitted(multiTenantActor,first,true),true);
+ assert.equal(tenantPermitted(multiTenantActor,second,false),true);
+ assert.equal(tenantPermitted(multiTenantActor,second,true),false);
+ assert.equal(tenantPermitted(multiTenantActor,crypto.randomUUID(),false),false);
  await assert.rejects(
-  createTenantMember(second,owner,{name:'Super Teste',email:superEmail,role:'admin'}),
+  createTenantMember(second,owner,{name:'Super Teste',email:superEmail,role:'admin',allow_existing_membership:true}),
   /Super Admin/
  );
- assert.equal((await query('select count(*)::int n from tenant_members where tenant_id=$1',[second])).rows[0].n,0);
+ assert.equal((await query('select count(*)::int n from tenant_members where tenant_id=$1',[second])).rows[0].n,1);
 
- const same=await createTenantMember(first,owner,{name:'Admin Teste',email:adminEmail,role:'viewer'});
+ const same=await createTenantMember(first,owner,{name:'Admin Teste',email:adminEmail,role:'viewer',allow_existing_membership:false});
  assert.equal(same.created,false);
  assert.equal(same.temporary_password,null);
  assert.equal((await query('select role from tenant_members where user_id=$1 and tenant_id=$2',[admin,first])).rows[0].role,'viewer');
- console.log('Isolamento de contas: admin de tenant sem acesso global, vínculo cruzado e Super Admin reutilizado bloqueados');
+ console.log('Multi-tenant: vínculo cruzado explícito permitido, permissões por ambiente isoladas e Super Admin protegido');
 }finally{await pool.end();}

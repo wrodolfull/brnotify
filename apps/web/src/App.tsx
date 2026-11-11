@@ -91,7 +91,12 @@ function Workspace({sessionRef}:{sessionRef:RefObject<Session|null>}){
  const segment=selected?.segment||actor?.memberships.find(m=>m.tenant_id===tenantId)?.segment||'custom';
  const isSuper=!!actor?.superAdmin;
  const role=isSuper?'admin':(selected?.role||actor?.memberships.find(m=>m.tenant_id===tenantId)?.role||'viewer');
- const changeTenant=useCallback((id:string)=>{tenantIdRef.current=id;setTenantId(id);localStorage.setItem('brnotify.tenant',id);navigate('/');setMenuOpen(false)},[navigate]);
+ const changeTenant=useCallback((id:string)=>{
+  // Browser-side safety and UX; API still independently validates each tenant.
+  if(!tenants.some(t=>(t.id||t.tenant_id)===id))return;
+  tenantIdRef.current=id;setTenantId(id);localStorage.setItem('brnotify.tenant',id);
+  navigate('/');setMenuOpen(false);
+ },[navigate,tenants]);
  const ctx=useMemo(()=>actor?{actor,tenantId,tenantName,segment,role:role as 'admin'|'viewer',isSuper,api,selectTenant:changeTenant,notify,refresh}:null,[actor,tenantId,tenantName,segment,role,isSuper,api,changeTenant,notify,refresh]);
  if(busy)return <Loader/>;
  if(fatal)return <div className="error-full"><h2>Acesso indisponível</h2><p>{fatal}</p><Button onClick={()=>supabase.auth.signOut()}>Sair</Button></div>;
@@ -103,7 +108,9 @@ function Workspace({sessionRef}:{sessionRef:RefObject<Session|null>}){
    {menuOpen&&<button className="mobile-scrim" aria-label="Fechar menu" onClick={close}/>}
    <aside className={'sidebar '+(menuOpen?'sidebar-open':'')}>
     <div className="sidebar-top"><div className="sidebar-logo"><div className="logo-icon"><Bell size={20} fill="currentColor"/></div><strong>BR<span>Notify</span></strong></div><button className="sidebar-close" onClick={close} aria-label="Fechar"><X size={20}/></button></div>
-    <div className="sidebar-workspace"><span className="sidebar-caption">AMBIENTE ATUAL</span><label className="workspace-select"><Building2 size={18}/><select aria-label="Ambiente atual" value={tenantId} onChange={e=>changeTenant(e.target.value)}><option value="">Selecione um ambiente</option>{tenants.map(t=><option key={t.id||t.tenant_id} value={t.id||t.tenant_id}>{t.name}</option>)}</select><ChevronDown size={14}/></label></div>
+    <div className="sidebar-workspace"><span className="sidebar-caption">AMBIENTE ATUAL</span>{(isSuper||tenants.length>1)
+     ?<label className="workspace-select"><Building2 size={18}/><select aria-label="Ambiente atual" value={tenantId} onChange={e=>changeTenant(e.target.value)}><option value="">Selecione um ambiente</option>{tenants.map(t=><option key={t.id||t.tenant_id} value={t.id||t.tenant_id}>{t.name}</option>)}</select><ChevronDown size={14}/></label>
+     :<div className="workspace-select"><Building2 size={18}/><span style={{color:'#fff',fontWeight:700,fontSize:12}}>{tenantName}</span></div>}</div>
     <nav className="side-nav"><span className="sidebar-caption">PRINCIPAL</span>
      <MenuItem to="/" icon={LayoutDashboard} label="Visão geral" onClose={close}/>
      <MenuItem to="/notifications" icon={Send} label="Notificações" onClose={close}/>
@@ -120,7 +127,7 @@ function Workspace({sessionRef}:{sessionRef:RefObject<Session|null>}){
    </aside>
    <div className="main-shell"><header className="topbar"><button className="mobile-menu" aria-label="Abrir menu" onClick={()=>setMenuOpen(true)}><Menu size={23}/></button><div className="topbar-breadcrumb"><span>BR Notify</span><span className="divider-dot">/</span><strong>{tenantName}</strong></div><div className="topbar-right"><span className="topbar-env">{isSuper?'Super Admin':role==='viewer'?'Visualização':'Admin'}</span><div className="topbar-avatar">{(actor?.email||'').slice(0,1).toUpperCase()}</div></div></header>
     <main className="page-content">{!tenantId&&location.pathname!=='/tenants'?<div className="empty-workspace"><Building2 size={34}/><h2>Nenhum ambiente selecionado</h2><p>Crie ou selecione um ambiente para começar.</p>{isSuper&&<Button onClick={()=>navigate('/tenants')}>Gerenciar ambientes</Button>}</div>:
-     <Routes><Route path="/" element={<Dashboard/>}/><Route path="/notifications" element={<Notifications/>}/><Route path="/activities" element={<Notifications initialMode="history"/>}/><Route path="/contacts" element={<Contacts/>}/><Route path="/events" element={<Events/>}/><Route path="/imports" element={<Imports/>}/><Route path="/flows" element={<WorkflowAutomations/>}/><Route path="/automations" element={<Automations/>}/><Route path="/messages" element={<Messages/>}/><Route path="/reports" element={<Reports/>}/><Route path="/settings" element={<SettingsPage/>}/><Route path="/template-library" element={<TemplateLibrary/>}/><Route path="/api-integrations" element={role==='admin'?<ApiIntegrations/>:<Navigate to="/"/>}/><Route path="/tenants" element={isSuper?<Tenants/>:<Navigate to="/"/>}/><Route path="/members" element={isSuper?<Members/>:<Navigate to="/"/>}/><Route path="*" element={<Navigate to="/"/>}/></Routes>}</main>
+     <Routes key={tenantId}><Route path="/" element={<Dashboard/>}/><Route path="/notifications" element={<Notifications/>}/><Route path="/activities" element={<Notifications initialMode="history"/>}/><Route path="/contacts" element={<Contacts/>}/><Route path="/events" element={<Events/>}/><Route path="/imports" element={<Imports/>}/><Route path="/flows" element={<WorkflowAutomations/>}/><Route path="/automations" element={<Automations/>}/><Route path="/messages" element={<Messages/>}/><Route path="/reports" element={<Reports/>}/><Route path="/settings" element={<SettingsPage/>}/><Route path="/template-library" element={<TemplateLibrary/>}/><Route path="/api-integrations" element={role==='admin'?<ApiIntegrations/>:<Navigate to="/"/>}/><Route path="/tenants" element={isSuper?<Tenants/>:<Navigate to="/"/>}/><Route path="/members" element={isSuper?<Members/>:<Navigate to="/"/>}/><Route path="*" element={<Navigate to="/"/>}/></Routes>}</main>
    </div>
    {toast&&<div role="status" className={'toast toast-'+toast.kind}>{toast.message}<button onClick={()=>setToast(null)}><X size={15}/></button></div>}
   </div>

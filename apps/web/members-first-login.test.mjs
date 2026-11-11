@@ -26,3 +26,12 @@ test('API enforces first-password gate independently of the UI',()=>{
  assert.match(backend,/\/api\/auth\/initial-password/);
  assert.match(backend,/createTenantMember/);
 });
+
+test('existing member multi-tenant grants require explicit confirmation and do not inherit global menus',()=>{
+ assert.match(members,/allow_existing_membership/);
+ assert.match(members,/Ambiente de destino/);
+ assert.match(members,/Contas existentes mantêm a senha atual/);
+ assert.match(app,/tenants\.length>1/);
+ assert.match(app,/Routes key=\{tenantId\}/);
+ assert.match(app,/isSuper&&/);
+});
