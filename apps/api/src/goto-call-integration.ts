@@ -27,6 +27,7 @@ export async function activateCallMonitoring(tenantId:string){
     enabled=false,state_subscribed=false,report_subscription_id=null,report_revision_subscription_id=null,channel_id=null,last_error=null,updated_at=now()`,
   [tenantId,secretHash]
  );
+ let stage='criar canal de notificações';
  try{
   const webhook=env.API_URL.replace(/\/$/,'')+'/api/webhooks/goto-calls/'+tenantId+'/'+secret;
   const channel=await gotoRequest(tenantId,'/notification-channel/v1/channels/brnotify-'+tenantId.slice(0,20)+'-'+crypto.randomBytes(4).toString('hex'),{
@@ -35,12 +36,14 @@ export async function activateCallMonitoring(tenantId:string){
   if(!channel.channelId)throw new Error('A GoTo não retornou o identificador do canal de notificações.');
   const channelId=channel.channelId;
   await query('update goto_call_monitors set channel_id=$2,updated_at=now() where tenant_id=$1',[tenantId,channelId]);
+  stage='assinar estados de chamadas';
   const state=await gotoRequest(tenantId,'/call-events/v1/subscriptions',{
    method:'POST',json:{channelId,accountKeys:[{id:accountKey,events:['STARTING','ACTIVE','ENDING']}]}
   }) as {accountKeys?:Array<{id:string;status:number}>};
   if(!state.accountKeys?.some(x=>x.id===accountKey&&x.status>=200&&x.status<300))
    throw new Error('A assinatura de estados de chamada não foi confirmada pela GoTo.');
   await query('update goto_call_monitors set state_subscribed=true,updated_at=now() where tenant_id=$1',[tenantId]);
+  stage='assinar relatórios de chamadas';
   const reports=await gotoRequest(tenantId,'/call-events-report/v1/subscriptions',{
    method:'POST',json:{channelId,eventTypes:['REPORT_SUMMARY'],accountKeys:[accountKey]}
   }) as {items?:Array<{id:string}>};
@@ -50,9 +53,13 @@ export async function activateCallMonitoring(tenantId:string){
    [tenantId,reportSubscriptionId]);
   return {active:true,channel_id:channelId,already_active:false};
  }catch(e){
+  const reason=e instanceof Error?e.message:'Falha desconhecida';
+  const message=reason.startsWith('GoTo HTTP ')
+   ? reason:'Falha ao '+stage+': '+reason;
+  console.error('[GoTo call monitoring]',JSON.stringify({stage,error:message.slice(0,260)}));
   await query('update goto_call_monitors set last_error=$2,updated_at=now() where tenant_id=$1',
-   [tenantId,(e instanceof Error?e.message:'Falha desconhecida').slice(0,220)]);
-  throw e;
+   [tenantId,message.slice(0,220)]);
+  throw new Error(message);
  }
 }
 
