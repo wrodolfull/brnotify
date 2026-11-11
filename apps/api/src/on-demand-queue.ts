@@ -77,7 +77,7 @@ export async function enqueueOnDemandMessage(tenantId:string,apiKeyId:string,bod
 }
 export async function getOnDemandMessage(tenantId:string,messageId:string){
  const found=await query(
-  "select id,status,created_at,sent_at,error_code from on_demand_messages where id=$1 and tenant_id=$2",
+  "select id,status,created_at,sent_at,error_code,case when error_code='VALIDATION' then error_description when status='failed' then 'Falha de envio; consulte o histórico da plataforma' else null end as error_description from on_demand_messages where id=$1 and tenant_id=$2",
   [messageId,tenantId]
  );
  return found.rows[0]||null;
