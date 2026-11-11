@@ -79,7 +79,7 @@ export async function finishFirstPasswordChange(userId:string,newPassword:string
  // The temporary password is random and only its fingerprint is stored.
  // Prevent marking the first login complete without actually changing it.
  if(data.user.app_metadata?.[TEMP_PASSWORD_FINGERPRINT]===fingerprint(newPassword))return 'reused';
- const metadata={...(data.user.app_metadata||{}),[FORCE_PASSWORD_CHANGE]:false};
+ const metadata:Record<string,unknown>={...(data.user.app_metadata||{}),[FORCE_PASSWORD_CHANGE]:false};
  delete metadata[TEMP_PASSWORD_FINGERPRINT];
  const {error:updateError}=await supabase.auth.admin.updateUserById(userId,{
   password:newPassword,app_metadata:metadata
