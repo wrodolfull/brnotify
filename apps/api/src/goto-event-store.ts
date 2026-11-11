@@ -57,10 +57,10 @@ export async function listGoToEvents(tenantId:string,page:unknown,kind:'call'|'m
  const [items,total]=await Promise.all([
   query(`select id,event_type,source,conversation_space_id,occurred_at,metadata
    from integration_events where tenant_id=$1 ${filter}
-   order by occurred_at desc,id desc limit 20 offset $2`,[tenantId,p.offset]),
+   order by occurred_at desc,id desc limit 50 offset $2`,[tenantId,p.offset]),
   query(`select count(*)::int as n from integration_events where tenant_id=$1 ${filter}`,[tenantId])
  ]);
- return {items:items.rows,total:total.rows[0].n,page:p.page,pages:Math.ceil(total.rows[0].n/20)};
+ return {items:items.rows,total:total.rows[0].n,page:p.page,pages:Math.ceil(total.rows[0].n/50)};
 }
 export async function listGoToCalls(tenantId:string,page:unknown){
  const p=pageParams(page);
@@ -69,10 +69,10 @@ export async function listGoToCalls(tenantId:string,page:unknown){
    sequence_gap,report_status,summary,updated_at,
    intelligence_checked_at,intelligence_signal_count,attention_level
    from goto_call_conversations where tenant_id=$1 order by coalesce(ended_at,started_at,created_at) desc,id desc
-   limit 20 offset $2`,[tenantId,p.offset]),
+   limit 50 offset $2`,[tenantId,p.offset]),
   query('select count(*)::int as n from goto_call_conversations where tenant_id=$1',[tenantId])
  ]);
- return {items:items.rows,total:total.rows[0].n,page:p.page,pages:Math.ceil(total.rows[0].n/20)};
+ return {items:items.rows,total:total.rows[0].n,page:p.page,pages:Math.ceil(total.rows[0].n/50)};
 }
 
 /** 90-day operational retention of external events and finished call summaries. */
