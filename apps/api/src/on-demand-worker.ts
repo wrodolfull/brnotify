@@ -42,7 +42,7 @@ export async function processOnDemandMessages(){
  let providerId:string|null=null;
  try{
   const selected=await query(
-   `select m.*,c.name as contact_name,c.consent,c.opted_out_at,
+   `select m.*,c.name as contact_name,c.consent,c.is_active,c.opted_out_at,
       t.status as tenant_status,mt.name as template_name,mt.language_code,
       mt.status as template_status,mt.definition,mt.variable_map,
       g.from_touchpoint,k.revoked_at as token_revoked_at,k.expires_at as token_expires_at
@@ -58,7 +58,7 @@ export async function processOnDemandMessages(){
   const v=selected.rows[0];
   if(!v||v.tenant_status!=='active'||!v.from_touchpoint||!v.template_name)
    throw new Error('Ambiente, template ou conexão GoTo indisponível');
-  if(!v.consent||v.opted_out_at)throw new Error('Contato não autorizado ou com opt-out');
+  if(!v.consent||v.opted_out_at||!v.is_active)throw new Error('Contato inativo, sem autorização ou com opt-out');
   if(!['panel','automation'].includes(v.source)&&(!v.api_key_id||v.token_revoked_at||!v.token_expires_at||new Date(v.token_expires_at).getTime()<=Date.now()))
    throw new Error('Chave da integração revogada ou expirada');
   if(new Date(v.expires_at).getTime()<=Date.now())throw new Error('Notificação expirou antes do envio');
