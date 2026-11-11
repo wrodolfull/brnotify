@@ -70,7 +70,7 @@ try{
  assert.deepEqual(unlinked.items,[]);
 
  // Stress the page boundary: navbar options still include ALL authorized tenants.
- const extra=23;
+ const extra=53;
  for(let i=0;i<extra;i++){
   await query(
    "insert into tenants(name,slug,segment) values($1,$2,'custom')",
