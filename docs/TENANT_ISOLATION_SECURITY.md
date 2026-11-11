@@ -26,7 +26,10 @@ WHERE lower(u.email)=lower('EMAIL_DA_CONTA_DE_TESTE');
 ## Defesa em profundidade aplicada
 
 - O backend usa uma função testável única que distingue permissões por tenant de acesso global; privilégios não são inferidos de `role='admin'`.
-- A criação de usuário pelo Super Admin recusa reutilizar uma conta que já é Super Admin ou já possui vínculo a outro tenant. O administrador deve criar uma conta separada para cada empresa. **A alteração não remove vínculos cruzados anteriores**.
-- São executados testes para cabeçalho de tenant forjado, leitor tentando escrita, associação indevida entre empresas e reutilização de identidade Super Admin.
+- O Super Admin pode conceder acesso a **mais de um tenant por conta comum**, com permissão `admin` ou `viewer` independente por tenant. Quando já há vínculo com outra empresa, a criação do vínculo exige confirmação explícita `allow_existing_membership=true`; caso contrário retorna HTTP 409. Contas de Super Admin não podem ser reutilizadas como contas de membros.
+- O banco usa chave primária composta `(tenant_id,user_id)` e **não deve receber índice `UNIQUE(user_id)`**: múltiplos vínculos são permitidos por decisão de produto.
+- O seletor mostra somente os tenants autorizados pela API `GET /api/tenant-options`. Para um único tenant, mostra apenas o nome. Para dois ou mais, habilita a troca; os componentes da tela são remontados na troca.
+- A criação de acesso a uma empresa não altera a senha nem as permissões concedidas em outra empresa. Remover um vínculo também não elimina a conta de autenticação nem outros vínculos.
+- São executados testes para cabeçalho de tenant forjado, leitor tentando escrita, confirmação exigida para múltiplos vínculos, permissões independentes por empresa e reutilização de identidade Super Admin.
 
 Não publique credenciais, senhas, IDs de sessão ou tokens em tickets e capturas de tela. As limitações de RLS e de chaves de integração devem continuar sendo auditadas separadamente.
