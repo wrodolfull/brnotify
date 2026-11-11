@@ -17,10 +17,11 @@ export function Members(){
   const v=formValues(e);
   try{
    const result=await api('/api/members',{method:'POST',body:JSON.stringify({
-    name:v.name,email:v.email,role:v.role
+    name:v.name,email:v.email,role:v.role,
+    allow_existing_membership:v.allow_existing_membership==='on'
    })});
    setCredentials(result);list.refresh();
-   notify(result.created?'Usuário criado com senha provisória.':'Conta existente vinculada ao ambiente.');
+   notify(result.created?'Usuário criado com senha provisória.':'Conta existente vinculada a '+tenantName+'.');
   }catch(e:any){setError(e.message)}finally{setBusy(false)}
  }
  async function reset(userId:string,email:string){
@@ -72,7 +73,7 @@ export function Members(){
    {credentials?<div className="form-stack">
     <p>{credentials.temporary_password
      ?'Copie e compartilhe estas credenciais por um canal seguro. A senha só aparece agora e deverá ser trocada no primeiro acesso.'
-     :'Este e-mail já possui uma conta no Supabase. O acesso ao ambiente foi concedido sem alterar a senha existente.'}</p>
+     :'A conta existente recebeu acesso a '+tenantName+'. O usuário mantém a senha atual e poderá trocar de ambiente pelo seletor, quando tiver mais de um vínculo.'}</p>
     <label className="field"><span>E-mail</span><input readOnly value={credentials.email}/></label>
     {credentials.temporary_password&&<>
      <label className="field"><span>Senha provisória</span><input readOnly value={credentials.temporary_password}
@@ -83,13 +84,18 @@ export function Members(){
     <div className="form-footer"><Button onClick={close}>Concluir</Button></div>
    </div>
    :<form className="form-stack" onSubmit={create}>
+    <div className="hint"><strong>Ambiente de destino: {tenantName}</strong></div>
     <Input name="name" label="Nome completo" placeholder="Nome do usuário" required/>
     <Input name="email" type="email" label="E-mail" placeholder="pessoa@empresa.com.br" required/>
-    <label className="field"><span>Permissão</span><select name="role">
+    <label className="field"><span>Permissão neste ambiente</span><select name="role">
      <option value="admin">Administrador — gerencia dados e integrações</option>
      <option value="viewer">Visualizador — somente leitura</option>
     </select></label>
-    <p className="hint">Se o e-mail for novo, o Supabase criará a conta sem SMTP e uma senha provisória será exibida uma única vez. Contas de outros ambientes e contas Super Admin não podem ser reutilizadas. Para testar um novo acesso, utilize uma janela anônima: criar usuário não muda sua sessão de Super Admin.</p>
+    <label className="hint" style={{display:'flex',alignItems:'flex-start',gap:10,cursor:'pointer'}}>
+     <input type="checkbox" name="allow_existing_membership" style={{marginTop:3,flexShrink:0}}/>
+     <span>Se o e-mail já tiver acesso a outra empresa, autorizo conceder acesso também a <strong>{tenantName}</strong>, sem remover os vínculos anteriores.</span>
+    </label>
+    <p className="hint">Usuários novos recebem senha provisória sem SMTP. Contas existentes mantêm a senha atual; as permissões são independentes por empresa. Contas Super Admin não podem ser vinculadas como usuários comuns.</p>
     <ErrorHint error={error}/>
     <SubmitRow busy={busy} label="Criar acesso" onCancel={close}/>
    </form>}
