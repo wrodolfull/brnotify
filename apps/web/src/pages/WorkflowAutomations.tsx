@@ -73,6 +73,7 @@ const fromSaved=(f:any):Form=>({
 export function WorkflowAutomations(){
  const {api,role,notify}=useApp(),canEdit=role==='admin';
  const [view,setView]=useState<'list'|'edit'|'runs'>('list');
+ const [showExamples,setShowExamples]=useState(true);
  const [selected,setSelected]=useState<any>(null);
  const [form,setForm]=useState<Form>({...blank});
  const [options,setOptions]=useState<{templates:any[];endpoints:any[]}>({templates:[],endpoints:[]});
@@ -118,6 +119,18 @@ export function WorkflowAutomations(){
    flows.refresh();runs.refresh();
   }catch(e:any){setError(e.message)}finally{setBusy(false)}
  }
+ async function removeFlow(flow:any){
+  if(!canEdit||busy)return;
+  if(!window.confirm('Excluir definitivamente a automação "'+flow.title+'"? Execuções anteriores serão removidas do histórico e ações ainda na fila serão canceladas. Essa operação não pode ser desfeita.'))return;
+  setBusy(true);setError('');
+  try{
+   const result=await api('/api/automation-flows/'+flow.id,{method:'DELETE'});
+   notify('Automação excluída. '+(result.cancelled_messages||0)+' mensagens e '+(result.cancelled_webhooks||0)+' webhooks pendentes cancelados.');
+   if(flows.page>1&&flows.data.items.length===1)flows.setPage(flows.page-1);
+   else flows.refresh();
+   runs.refresh();
+  }catch(e:any){setError(e.message)}finally{setBusy(false)}
+ }
  function triggerSelect(t:Trigger){
   setForm(v=>({...v,trigger_type:t,match_mode:t==='message.received'?v.match_mode:'any',
    match_text:t==='message.received'?v.match_text:'',
@@ -132,7 +145,13 @@ export function WorkflowAutomations(){
    action={view==='list'&&canEdit?<Button onClick={()=>edit()}>Criar automação</Button>:view!=='list'?<Button secondary onClick={()=>{setView('list');setError('')}}>Voltar</Button>:null}/>
   <ErrorHint error={error}/>
   {view==='list'&&<>
-   {!flows.data.items.length&&<Card>
+   <div className="wf-example-heading">
+    <div><h2>Modelos prontos</h2><p className="muted">Use um exemplo para criar outra automação a qualquer momento.</p></div>
+    <button className="wf-link" type="button" aria-expanded={showExamples} onClick={()=>setShowExamples(v=>!v)}>
+     {showExamples?'Ocultar modelos':'Ver modelos de automação'}
+    </button>
+   </div>
+   {showExamples&&<Card>
     <h2>Comece por um exemplo</h2>
     <p className="muted">Escolha um ponto de partida. Você poderá revisar todos os detalhes antes de ativar.</p>
     <div className="wf-example-grid">{examples.map(x=><button key={x.title} type="button" disabled={!canEdit} className="wf-example"
@@ -150,6 +169,7 @@ export function WorkflowAutomations(){
      <div className="wf-item-actions">
       {canEdit&&<Button secondary disabled={busy||f.status==='active'} onClick={()=>edit(f)}>Editar</Button>}
       {canEdit&&<Button disabled={busy} secondary={f.status==='active'} onClick={()=>void changeStatus(f)}>{f.status==='active'?'Pausar':'Ativar'}</Button>}
+      {canEdit&&<Button danger secondary disabled={busy} onClick={()=>void removeFlow(f)}>Excluir</Button>}
      </div>
     </div>)}</div>:<Empty title="Nenhuma automação criada" subtitle="Crie uma regra simples a partir de um exemplo ou configure a sua."/>}
     <Pagination page={flows.page} pages={flows.data.pages} onChange={flows.setPage}/>
