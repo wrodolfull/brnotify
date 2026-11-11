@@ -37,6 +37,8 @@ jobs:
         run: npx tsx --test apps/web/auth-session.test.mjs
       - name: Automation and GoTo settings UI regression
         run: node --test apps/web/flows-settings.test.mjs
+      - name: Contact lifecycle and bulk management UI regression
+        run: node --test apps/web/contacts-lifecycle.test.mjs
       - name: API documentation and code example regression test
         run: npx tsx apps/api/scripts/docs-reference-smoke.ts
       - name: Database migration smoke test
