@@ -32,7 +32,7 @@ export function calculateReminder(eventISO:string,zone:string,rule:Rule){
 export type SqlRunner=(sql:string,params?:unknown[])=>Promise<{rows:any[];rowCount:number|null}>;
 export type DeliveryMode='automation'|'custom';
 export type DeliveryScheduleInput={
- starts_at:string|Date;timezone:string;status:string;consent:boolean;opted_out_at?:string|Date|null;
+ starts_at:string|Date;timezone:string;status:string;consent:boolean;is_active?:boolean;opted_out_at?:string|Date|null;
  confirmation_status?:string;delivery_mode?:DeliveryMode;
  custom_send_at?:string|Date|null;custom_template_id?:string|null;
  reminder_overrides?:Record<string,any>|null;contact_overrides?:Record<string,any>|null;
@@ -53,6 +53,7 @@ export function planEventDelivery(
  const sendDate=input.custom_send_at?DateTime.fromJSDate(input.custom_send_at instanceof Date?input.custom_send_at:new Date(input.custom_send_at),{zone:'utc'}):null;
  if(!start.isValid||start.toMillis()<=now)warnings.push('O compromisso precisa ocorrer no futuro para gerar notificações.');
  if(input.status!=='scheduled')warnings.push('O evento não está programado.');
+ if(input.is_active===false)warnings.push('O contato está inativo. Reative-o antes de programar mensagens.');
  if(!input.consent||input.opted_out_at)warnings.push('O contato não autorizou o recebimento pelo WhatsApp.');
  if(['reschedule_requested','declined'].includes(input.confirmation_status||''))
   warnings.push('A confirmação do evento impede novos lembretes.');
@@ -105,7 +106,7 @@ export async function previewEventDelivery(
  run:SqlRunner=query
 ){
  const tenant=await run('select timezone,status from tenants where id=$1',[tenantId]);
- const contact=await run('select consent,opted_out_at,reminder_overrides from contacts where tenant_id=$1 and id=$2',[tenantId,input.contact_id]);
+ const contact=await run('select consent,is_active,opted_out_at,reminder_overrides from contacts where tenant_id=$1 and id=$2',[tenantId,input.contact_id]);
  if(!tenant.rowCount||!contact.rowCount)return null;
  const rules=await run(
   'select r.*, mt.name as template_name, mt.status as template_status from reminder_rules r left join message_templates mt on mt.id=r.template_id and mt.tenant_id=r.tenant_id where r.tenant_id=$1 order by r.slot',
@@ -119,7 +120,7 @@ export async function previewEventDelivery(
  const starts_at=toUTC(input.starts_at,zone);
  const custom_send_at=input.delivery_mode==='custom'&&input.custom_send_at?toUTC(input.custom_send_at,zone):null;
  const plan=planEventDelivery({
-  starts_at,timezone:zone,status:'scheduled',consent:contact.rows[0].consent,
+  starts_at,timezone:zone,status:'scheduled',consent:contact.rows[0].consent,is_active:contact.rows[0].is_active,
   opted_out_at:contact.rows[0].opted_out_at,
   delivery_mode:input.delivery_mode,custom_send_at,custom_template_id:input.custom_template_id,
   reminder_overrides:input.reminder_overrides,contact_overrides:contact.rows[0].reminder_overrides
@@ -134,7 +135,7 @@ export async function previewEventDelivery(
 }
 export async function rebuildEvent(tenantId:string,eventId:string,run:SqlRunner=query){
  const loaded=await run(
-  'select e.*,t.timezone,c.consent,c.opted_out_at,c.reminder_overrides as contact_overrides from events e join tenants t on t.id=e.tenant_id join contacts c on c.id=e.contact_id and c.tenant_id=e.tenant_id where e.tenant_id=$1 and e.id=$2',
+  'select e.*,t.timezone,c.consent,c.is_active,c.opted_out_at,c.reminder_overrides as contact_overrides from events e join tenants t on t.id=e.tenant_id join contacts c on c.id=e.contact_id and c.tenant_id=e.tenant_id where e.tenant_id=$1 and e.id=$2',
   [tenantId,eventId]
  );
  if(!loaded.rowCount)return;
