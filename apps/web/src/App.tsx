@@ -22,14 +22,31 @@ import {Tenants} from './pages/Tenants';
 import {Members} from './pages/Members';
 import {FirstPasswordChange} from './pages/FirstPasswordChange';
 function AuthScreen(){
- const [email,setEmail]=useState(''),[password,setPassword]=useState(''),[error,setError]=useState(''),[busy,setBusy]=useState(false),[reset,setReset]=useState(false);
- async function submit(e:FormEvent){e.preventDefault();setBusy(true);setError('');
+ const [email,setEmail]=useState(''),[password,setPassword]=useState(''),[error,setError]=useState(''),[busy,setBusy]=useState(false),[help,setHelp]=useState(false);
+ async function submit(e:FormEvent){
+  e.preventDefault();setBusy(true);setError('');
   try{
-   if(reset){const {error}=await supabase.auth.resetPasswordForEmail(email,{redirectTo:window.location.origin});if(error)throw error;setError('E-mail de recuperação solicitado. Confira sua caixa de entrada.')}
-   else{const {error}=await supabase.auth.signInWithPassword({email,password});if(error)throw error}
+   const {error}=await supabase.auth.signInWithPassword({email,password});
+   if(error)throw error;
   }catch(e:any){setError(e.message||'Não foi possível entrar')}finally{setBusy(false)}
  }
- return <div className="auth-page"><div className="auth-brand"><span className="brand-square"><Bell size={23} fill="currentColor"/></span><span>BR<span className="brand-blue">Notify</span></span></div><Card className="auth-card"><div className="auth-kicker"><LockKeyhole size={16}/> Acesso restrito</div><h1>{reset?'Recuperar acesso':'Bem-vindo de volta'}</h1><p>Gerencie lembretes e notificações em um só lugar. O acesso é concedido pelo administrador da plataforma.</p><form onSubmit={submit} className="form-stack"><label className="field"><span>E-mail</span><input type="email" value={email} onChange={e=>setEmail(e.target.value)} autoComplete="email" required placeholder="seu@email.com"/></label>{!reset&&<label className="field"><span>Senha</span><input type="password" value={password} onChange={e=>setPassword(e.target.value)} autoComplete="current-password" required placeholder="••••••••"/></label>}<ErrorHint error={error}/><Button type="submit" disabled={busy}>{busy?'Verificando...':reset?'Enviar recuperação':'Entrar na plataforma'}</Button></form><button className="text-link" onClick={()=>{setReset(!reset);setError('')}}>{reset?'Voltar ao login':'Esqueci minha senha'}</button></Card><small>BR Notify · Ambiente seguro</small></div>;
+ return <div className="auth-page">
+  <div className="auth-brand"><span className="brand-square"><Bell size={23} fill="currentColor"/></span><span>BR<span className="brand-blue">Notify</span></span></div>
+  <Card className="auth-card"><div className="auth-kicker"><LockKeyhole size={16}/> Acesso restrito</div>
+   <h1>{help?'Recuperar acesso':'Bem-vindo de volta'}</h1>
+   {help?<p>Como o BR Notify não utiliza envio de convites por e-mail, solicite ao Super Admin uma nova senha provisória em <strong>Acessos → Redefinir senha</strong>. Ela deverá ser trocada no primeiro login.</p>:
+   <>
+    <p>Gerencie lembretes e notificações em um só lugar. O acesso é concedido pelo administrador da plataforma.</p>
+    <form onSubmit={submit} className="form-stack">
+     <label className="field"><span>E-mail</span><input type="email" value={email} onChange={e=>setEmail(e.target.value)} autoComplete="email" required placeholder="seu@email.com"/></label>
+     <label className="field"><span>Senha</span><input type="password" value={password} onChange={e=>setPassword(e.target.value)} autoComplete="current-password" required/></label>
+     <ErrorHint error={error}/>
+     <Button type="submit" disabled={busy}>{busy?'Verificando...':'Entrar na plataforma'}</Button>
+    </form>
+   </>}
+   <button className="text-link" onClick={()=>{setHelp(!help);setError('')}}>{help?'Voltar ao login':'Esqueci minha senha'}</button>
+  </Card><small>BR Notify · Ambiente seguro</small>
+ </div>;
 }
 function MenuItem({to,icon:Icon,label,onClose}:{to:string;icon:any;label:string;onClose:()=>void}){return <NavLink to={to} end={to==='/'} onClick={onClose} className={({isActive})=>'nav-item '+(isActive?'nav-active':'')}><Icon size={19} strokeWidth={1.8}/><span>{label}</span></NavLink>}
 function Workspace({sessionRef}:{sessionRef:RefObject<Session|null>}){
