@@ -18,6 +18,8 @@ export const newPasswordInput=z.object({
 export function generateTemporaryPassword(){
  return crypto.randomBytes(24).toString('base64url');
 }
+const TEMP_PASSWORD_FINGERPRINT='brnotify_temporary_password_fingerprint';
+const fingerprint=(password:string)=>crypto.createHash('sha256').update(password).digest('hex');
 
 export async function createTenantMember(tenantId:string,actorId:string,input:z.infer<typeof memberInput>){
  // The existing Auth user might not have memberships yet. Never overwrite
@@ -31,7 +33,7 @@ export async function createTenantMember(tenantId:string,actorId:string,input:z.
   const {data,error}=await supabase.auth.admin.createUser({
    email:input.email,password:temporaryPassword,email_confirm:true,
    user_metadata:{full_name:input.name},
-   app_metadata:{[FORCE_PASSWORD_CHANGE]:true}
+   app_metadata:{[FORCE_PASSWORD_CHANGE]:true,[TEMP_PASSWORD_FINGERPRINT]:fingerprint(temporaryPassword)}
   });
   if(error||!data.user)throw new Error('Não foi possível criar a conta no Supabase Auth: '+(error?.message||'Erro desconhecido'));
   userId=data.user.id;
@@ -62,7 +64,8 @@ export async function resetTenantMemberPassword(tenantId:string,userId:string,ac
  const temporaryPassword=generateTemporaryPassword();
  const {error:updateError}=await supabase.auth.admin.updateUserById(userId,{
   password:temporaryPassword,
-  app_metadata:{...(data.user.app_metadata||{}),[FORCE_PASSWORD_CHANGE]:true}
+  app_metadata:{...(data.user.app_metadata||{}),[FORCE_PASSWORD_CHANGE]:true,
+   [TEMP_PASSWORD_FINGERPRINT]:fingerprint(temporaryPassword)}
  });
  if(updateError)throw new Error('Falha ao redefinir senha: '+updateError.message);
  await audit(tenantId,actorId,'member.password_reset',{user_id:userId});
@@ -73,9 +76,13 @@ export async function finishFirstPasswordChange(userId:string,newPassword:string
  const {data,error}=await supabase.auth.admin.getUserById(userId);
  if(error||!data.user)throw new Error('Não foi possível verificar sua conta');
  if(!needsPasswordChange(data.user.app_metadata))return false;
+ // The temporary password is random and only its fingerprint is stored.
+ // Prevent marking the first login complete without actually changing it.
+ if(data.user.app_metadata?.[TEMP_PASSWORD_FINGERPRINT]===fingerprint(newPassword))return 'reused';
+ const metadata={...(data.user.app_metadata||{}),[FORCE_PASSWORD_CHANGE]:false};
+ delete metadata[TEMP_PASSWORD_FINGERPRINT];
  const {error:updateError}=await supabase.auth.admin.updateUserById(userId,{
-  password:newPassword,
-  app_metadata:{...(data.user.app_metadata||{}),[FORCE_PASSWORD_CHANGE]:false}
+  password:newPassword,app_metadata:metadata
  });
  if(updateError)throw new Error('Não foi possível atualizar a senha: '+updateError.message);
  return true;
