@@ -120,6 +120,7 @@ router.post('/api/auth/initial-password',wrap(async(req,res)=>{
  if(!req.actor!.mustChangePassword)return res.status(409).json({error:'A conta não exige troca de senha'});
  const input=newPasswordInput.parse(req.body);
  const changed=await finishFirstPasswordChange(req.actor!.id,input.new_password);
+ if(changed==='reused')return res.status(422).json({error:'A nova senha precisa ser diferente da senha provisória'});
  if(!changed)return res.status(409).json({error:'A senha já foi atualizada'});
  res.setHeader('Cache-Control','no-store');
  return res.json({ok:true});
