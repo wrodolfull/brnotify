@@ -81,7 +81,7 @@ export function describeGotoHttpFailure(method:string,path:string,status:number,
   isHtml?' Resposta HTML do gateway/CDN, sem código JSON da API GoTo.':
   ' Resposta sem código de erro GoTo reconhecido.';
  // This is a provider request identifier, not a credential. Never include body or headers.
- const requestId=cloudFrontRequestId&&/^[A-Za-z0-9_+=/-]{1,150}$/.test(cloudFrontRequestId)?
+ const requestId=cloudFrontRequestId&&/^[A-Za-z0-9_+=\/-]{1,150}$/.test(cloudFrontRequestId)?
   ' Referência CDN: '+cloudFrontRequestId+'.':'';
  return 'GoTo HTTP '+status+' ao '+step+'.'+diagnostic+requestId;
 }
@@ -101,7 +101,7 @@ export async function gotoRequest(tenantId:string,path:string,options:{method?:s
    operation:gotoOperation(method,path),method,status:response.status,
    contentType:contentType.slice(0,80),
    responseKind:/html/i.test(contentType)||/^\s*(?:<!doctype|<html|<head)/i.test(body)?'html':'api',
-   ...(cdnId&&/^[A-Za-z0-9_+=/-]{1,150}$/.test(cdnId)?{cdnRequestId:cdnId}:{})
+   ...(cdnId&&/^[A-Za-z0-9_+=\/-]{1,150}$/.test(cdnId)?{cdnRequestId:cdnId}:{})
   }));
   throw new Error(message);
  }
