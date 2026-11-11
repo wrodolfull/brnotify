@@ -141,9 +141,9 @@ router.patch('/api/tenants/:id',requireSuper,wrap(async(req,res)=>{
  res.json(result.rows[0]);
 }));
 router.get('/api/members',tenant(),requireSuper,wrap(async(req,res)=>{
- const p=pageParams(req.query.page),items=await query('select tenant_id,user_id,email,role,created_at from tenant_members where tenant_id=$1 order by created_at desc limit 20 offset $2',[req.tenantId,p.offset]);
+ const p=pageParams(req.query.page),items=await query('select tenant_id,user_id,email,role,created_at from tenant_members where tenant_id=$1 order by created_at desc limit 50 offset $2',[req.tenantId,p.offset]);
  const total=await query('select count(*)::int n from tenant_members where tenant_id=$1',[req.tenantId]);
- res.json({items:items.rows,total:total.rows[0].n,page:p.page,pages:Math.ceil(total.rows[0].n/20)});
+ res.json({items:items.rows,total:total.rows[0].n,page:p.page,pages:Math.ceil(total.rows[0].n/50)});
 }));
 router.post('/api/members',tenant(true),requireSuper,wrap(async(req,res)=>{
  const input=z.object({email:z.string().email().transform(v=>v.toLowerCase()),role:z.enum(['admin','viewer'])}).parse(req.body);
@@ -184,9 +184,9 @@ router.get('/api/contacts',tenant(),wrap(async(req,res)=>{
  const p=pageParams(req.query.page),search=String(req.query.q||'').trim().slice(0,100);
  const pattern='%'+search.replace(/[%_\\]/g,'\\$&')+'%';
  const where='tenant_id=$1 and ($2::text=\'\' or name ilike $3 or phone ilike $3)';
- const items=await query('select * from contacts where '+where+' order by created_at desc limit 20 offset $4',[req.tenantId,search,pattern,p.offset]);
+ const items=await query('select * from contacts where '+where+' order by created_at desc limit 50 offset $4',[req.tenantId,search,pattern,p.offset]);
  const total=await query('select count(*)::int n from contacts where '+where,[req.tenantId,search,pattern]);
- res.json({items:items.rows,total:total.rows[0].n,page:p.page,pages:Math.ceil(total.rows[0].n/20)});
+ res.json({items:items.rows,total:total.rows[0].n,page:p.page,pages:Math.ceil(total.rows[0].n/50)});
 }));
 router.post('/api/contacts',tenant(true),activeTenant,wrap(async(req,res)=>{
  const input=contactInput.parse(req.body);
@@ -218,9 +218,9 @@ router.patch('/api/contacts/:id',tenant(true),activeTenant,wrap(async(req,res)=>
 }));
 router.get('/api/records',tenant(),wrap(async(req,res)=>{
  const id=uuid.parse(req.query.contact_id),p=pageParams(req.query.page);
- const list=await query('select * from records where tenant_id=$1 and contact_id=$2 order by created_at desc limit 20 offset $3',[req.tenantId,id,p.offset]);
+ const list=await query('select * from records where tenant_id=$1 and contact_id=$2 order by created_at desc limit 50 offset $3',[req.tenantId,id,p.offset]);
  const count=await query('select count(*)::int n from records where tenant_id=$1 and contact_id=$2',[req.tenantId,id]);
- res.json({items:list.rows,total:count.rows[0].n,page:p.page,pages:Math.ceil(count.rows[0].n/20)});
+ res.json({items:list.rows,total:count.rows[0].n,page:p.page,pages:Math.ceil(count.rows[0].n/50)});
 }));
 router.post('/api/records',tenant(true),activeTenant,wrap(async(req,res)=>{
  const input=z.object({contact_id:uuid,label:str.min(1).max(180),kind:str.max(50).default('generic'),details:z.record(z.unknown()).default({})}).parse(req.body);
@@ -230,9 +230,9 @@ router.post('/api/records',tenant(true),activeTenant,wrap(async(req,res)=>{
 }));
 router.get('/api/events',tenant(),wrap(async(req,res)=>{
  const p=pageParams(req.query.page),id=req.query.contact_id?uuid.parse(req.query.contact_id):null;
- const items=await query('select e.*,c.name as contact_name,c.phone,r.label as record_label from events e join contacts c on c.id=e.contact_id and c.tenant_id=e.tenant_id left join records r on r.id=e.record_id and r.tenant_id=e.tenant_id where e.tenant_id=$1 and ($2::uuid is null or e.contact_id=$2) order by e.starts_at desc limit 20 offset $3',[req.tenantId,id,p.offset]);
+ const items=await query('select e.*,c.name as contact_name,c.phone,r.label as record_label from events e join contacts c on c.id=e.contact_id and c.tenant_id=e.tenant_id left join records r on r.id=e.record_id and r.tenant_id=e.tenant_id where e.tenant_id=$1 and ($2::uuid is null or e.contact_id=$2) order by e.starts_at desc limit 50 offset $3',[req.tenantId,id,p.offset]);
  const total=await query('select count(*)::int n from events where tenant_id=$1 and ($2::uuid is null or contact_id=$2)',[req.tenantId,id]);
- res.json({items:items.rows,total:total.rows[0].n,page:p.page,pages:Math.ceil(total.rows[0].n/20)});
+ res.json({items:items.rows,total:total.rows[0].n,page:p.page,pages:Math.ceil(total.rows[0].n/50)});
 }));
 router.post('/api/events/preview',tenant(),wrap(async(req,res)=>{
  const input=eventPreviewInput.parse(req.body);
@@ -336,9 +336,9 @@ router.put('/api/reminder-rules',tenant(true),activeTenant,wrap(async(req,res)=>
 router.get('/api/messages',tenant(),wrap(async(req,res)=>{
  const p=pageParams(req.query.page),status=req.query.status?String(req.query.status):null;
  if(status&&!['scheduled','processing','sent','delivered','failed','cancelled','unknown'].includes(status))return res.status(422).json({error:'Status inválido'});
- const items=await query('select m.*,c.name as contact_name,c.phone,e.title as event_title from scheduled_messages m join events e on e.id=m.event_id and e.tenant_id=m.tenant_id join contacts c on c.id=e.contact_id and c.tenant_id=m.tenant_id where m.tenant_id=$1 and ($2::text is null or m.status=$2) order by m.scheduled_at desc limit 20 offset $3',[req.tenantId,status,p.offset]);
+ const items=await query('select m.*,c.name as contact_name,c.phone,e.title as event_title from scheduled_messages m join events e on e.id=m.event_id and e.tenant_id=m.tenant_id join contacts c on c.id=e.contact_id and c.tenant_id=m.tenant_id where m.tenant_id=$1 and ($2::text is null or m.status=$2) order by m.scheduled_at desc limit 50 offset $3',[req.tenantId,status,p.offset]);
  const total=await query('select count(*)::int n from scheduled_messages where tenant_id=$1 and ($2::text is null or status=$2)',[req.tenantId,status]);
- res.json({items:items.rows,total:total.rows[0].n,page:p.page,pages:Math.ceil(total.rows[0].n/20)});
+ res.json({items:items.rows,total:total.rows[0].n,page:p.page,pages:Math.ceil(total.rows[0].n/50)});
 }));
 router.post('/api/messages/:id/retry',tenant(true),activeTenant,wrap(async(req,res)=>{
  const up=await query(
@@ -356,9 +356,9 @@ router.get('/api/templates/options',tenant(),wrap(async(req,res)=>{
 
 router.get('/api/templates',tenant(),wrap(async(req,res)=>{
  const p=pageParams(req.query.page);
- const items=await query('select id,name,language_code,status,category,definition,variable_map from message_templates where tenant_id=$1 order by name limit 20 offset $2',[req.tenantId,p.offset]);
+ const items=await query('select id,name,language_code,status,category,definition,variable_map from message_templates where tenant_id=$1 order by name limit 50 offset $2',[req.tenantId,p.offset]);
  const total=await query('select count(*)::int n from message_templates where tenant_id=$1',[req.tenantId]);
- res.json({items:items.rows,total:total.rows[0].n,page:p.page,pages:Math.ceil(total.rows[0].n/20)});
+ res.json({items:items.rows,total:total.rows[0].n,page:p.page,pages:Math.ceil(total.rows[0].n/50)});
 }));
 router.patch('/api/templates/:id',tenant(true),activeTenant,wrap(async(req,res)=>{
  const map=z.record(z.string().max(200)).parse(req.body.variable_map);
@@ -495,7 +495,7 @@ router.post('/api/imports/preview',tenant(true),activeTenant,upload.single('file
 router.post('/api/imports',tenant(true),activeTenant,upload.single('file'),wrap(async(req,res)=>{await importHandler(req,res,false);await audit(req.tenantId!,req.actor!.id,'import.completed');}));
 router.get('/api/imports',tenant(),wrap(async(req,res)=>{
  const p=pageParams(req.query.page);
- const items=await query('select * from import_jobs where tenant_id=$1 order by created_at desc limit 20 offset $2',[req.tenantId,p.offset]);
+ const items=await query('select * from import_jobs where tenant_id=$1 order by created_at desc limit 50 offset $2',[req.tenantId,p.offset]);
  const count=await query('select count(*)::int n from import_jobs where tenant_id=$1',[req.tenantId]);
- res.json({items:items.rows,total:count.rows[0].n,page:p.page,pages:Math.ceil(count.rows[0].n/20)});
+ res.json({items:items.rows,total:count.rows[0].n,page:p.page,pages:Math.ceil(count.rows[0].n/50)});
 }));
