@@ -20,6 +20,7 @@ import {ApiIntegrations} from './pages/ApiIntegrations';
 import {Reports} from './pages/Reports';
 import {Tenants} from './pages/Tenants';
 import {Members} from './pages/Members';
+import {FirstPasswordChange} from './pages/FirstPasswordChange';
 function AuthScreen(){
  const [email,setEmail]=useState(''),[password,setPassword]=useState(''),[error,setError]=useState(''),[busy,setBusy]=useState(false),[reset,setReset]=useState(false);
  async function submit(e:FormEvent){e.preventDefault();setBusy(true);setError('');
@@ -78,6 +79,7 @@ function Workspace({sessionRef}:{sessionRef:RefObject<Session|null>}){
  if(busy)return <Loader/>;
  if(fatal)return <div className="error-full"><h2>Acesso indisponível</h2><p>{fatal}</p><Button onClick={()=>supabase.auth.signOut()}>Sair</Button></div>;
  if(!ctx)return null;
+ if(actor?.mustChangePassword)return <FirstPasswordChange email={actor.email} sessionRef={sessionRef}/>;
  const close=()=>setMenuOpen(false);
  return <AppContext.Provider value={ctx}>
   <div className="layout">
