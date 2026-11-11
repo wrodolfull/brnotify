@@ -158,10 +158,10 @@ export async function listFlows(tenantId:string,page:unknown){
  const [rows,n]=await Promise.all([
   query(`select f.*, (select count(*)::int from automation_runs r
     where r.flow_id=f.id and r.tenant_id=f.tenant_id and r.created_at>now()-interval '7 days') as recent_runs
-    from automation_flows f where f.tenant_id=$1 order by f.created_at desc limit 20 offset $2`,[tenantId,p.offset]),
+    from automation_flows f where f.tenant_id=$1 order by f.created_at desc limit 50 offset $2`,[tenantId,p.offset]),
   query('select count(*)::int total from automation_flows where tenant_id=$1',[tenantId])
  ]);
- return {items:rows.rows,total:n.rows[0].total,page:p.page,pages:Math.ceil(n.rows[0].total/20)};
+ return {items:rows.rows,total:n.rows[0].total,page:p.page,pages:Math.ceil(n.rows[0].total/50)};
 }
 export async function listRuns(tenantId:string,page:unknown,flowId:string|null){
  if(flowId&&!uuidRe.test(flowId))throw new ApiOperationError(422,'Identificador inválido');
@@ -174,8 +174,8 @@ export async function listRuns(tenantId:string,page:unknown,flowId:string|null){
     from automation_runs r join automation_flows f on f.id=r.flow_id and f.tenant_id=r.tenant_id
     join integration_events e on e.id=r.event_id and e.tenant_id=r.tenant_id
     where r.tenant_id=$1 and ($2::uuid is null or r.flow_id=$2)
-    order by r.created_at desc,r.id desc limit 20 offset $3`,[tenantId,flowId,p.offset]),
+    order by r.created_at desc,r.id desc limit 50 offset $3`,[tenantId,flowId,p.offset]),
   query('select count(*)::int total from automation_runs where tenant_id=$1 and ($2::uuid is null or flow_id=$2)',[tenantId,flowId])
  ]);
- return {items:rows.rows,total:n.rows[0].total,page:p.page,pages:Math.ceil(n.rows[0].total/20)};
+ return {items:rows.rows,total:n.rows[0].total,page:p.page,pages:Math.ceil(n.rows[0].total/50)};
 }
