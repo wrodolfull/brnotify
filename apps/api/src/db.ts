@@ -1,7 +1,28 @@
 import pg from 'pg';
 import {env} from './config.js';
 
-export const pool=new pg.Pool({connectionString:env.DATABASE_URL,max:12,connectionTimeoutMillis:10000,idleTimeoutMillis:30000});
+// TCP connections may be closed while idle (database maintenance, network
+// resets, pooler failover). node-postgres emits these errors on the pool,
+// outside any query promise. An unhandled pool 'error' crashes Node.js.
+export const pool=new pg.Pool({
+ connectionString:env.DATABASE_URL,
+ max:12,
+ connectionTimeoutMillis:10000,
+ idleTimeoutMillis:30000,
+ keepAlive:true,
+ keepAliveInitialDelayMillis:10000
+});
+pool.on('error',(error:Error)=>{
+ // The pool removes the broken idle connection automatically. The next query
+ // opens another one; do not retry a potentially committed INSERT/UPDATE here.
+ // Avoid logging the error object or pg.Client: they can expose connection
+ // configuration, SQL or other sensitive data.
+ const code=(error as NodeJS.ErrnoException).code;
+ console.warn('[postgres] Conexão ociosa interrompida; pool descartou o cliente.',{
+  code:typeof code==='string'&&/^[A-Z0-9_]{2,40}$/.test(code)?code:'UNKNOWN',
+  total:pool.totalCount,idle:pool.idleCount,waiting:pool.waitingCount
+ });
+});
 export const query=(sql:string,params:unknown[]=[])=>(pool.query(sql,params));
 export const pageParams=(input:unknown)=>{
   const value=Number(input ?? 1);
