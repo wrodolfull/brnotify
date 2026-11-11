@@ -83,6 +83,10 @@ jobs:
         env:
           CI_DATABASE_URL: postgresql://postgres:test@127.0.0.1:5432/brnotify_ci
         run: npx tsx apps/api/scripts/flows-disconnect-smoke.ts
+      - name: Contacts and events lifecycle PostgreSQL smoke
+        env:
+          CI_DATABASE_URL: postgresql://postgres:test@127.0.0.1:5432/brnotify_ci
+        run: npx tsx apps/api/scripts/lifecycle-contacts-smoke.ts
       - name: GoTo intelligence PostgreSQL integration test
         env:
           CI_DATABASE_URL: postgresql://postgres:test@127.0.0.1:5432/brnotify_ci
