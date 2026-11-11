@@ -90,7 +90,25 @@ try{
  const stillPrivate=await listVisibleTenants(memberActor,1);
  assert.equal(stillPrivate.total,1);
 
- console.log('Tenant visibility: Super Admin, membership access, privacy, paging and all-options approved');
+ // A member explicitly granted access to a second tenant can switch between
+ // precisely those two environments, with a separate role in each one.
+ await query(
+  "insert into tenant_members(tenant_id,user_id,email,role) values($1,$2,$3,'admin')",
+  [secondId,memberId,'member.'+prefix+'@example.test']
+ );
+ const multiOptions=await listTenantOptions(memberActor);
+ assert.equal(multiOptions.items.length,2);
+ assert.deepEqual(
+  multiOptions.items.map((x:any)=>[x.id,x.role]).sort((a:any,b:any)=>String(a[0]).localeCompare(String(b[0]))),
+  [[firstId,'viewer'],[secondId,'admin']].sort((a:any,b:any)=>String(a[0]).localeCompare(String(b[0])))
+ );
+ const multiPage=await listVisibleTenants(memberActor,1);
+ assert.equal(multiPage.total,2);
+ assert.equal(multiPage.pages,1);
+ assert.ok(multiPage.items.every((x:any)=>x.id===firstId||x.id===secondId));
+ assert.ok(!multiOptions.items.some((x:any)=>String(x.name).startsWith('Tenant pagination')));
+
+ console.log('Tenant visibility: memberships for multiple tenants, independent roles, no unauthorized listing, paging approved');
 }finally{
  await pool.end();
 }
