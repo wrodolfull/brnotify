@@ -3,6 +3,7 @@ import {createClient} from '@supabase/supabase-js';
 import {env} from './config.js';
 import {query} from './db.js';
 import {needsPasswordChange,mayAccessDuringPasswordChange} from './password-policy.js';
+import {tenantRoleFor} from './tenant-authorization.js';
 
 export const supabase=createClient(env.SUPABASE_URL,env.SUPABASE_SERVICE_ROLE_KEY,{auth:{autoRefreshToken:false,persistSession:false}});
 type Actor={id:string;email:string;superAdmin:boolean;mustChangePassword:boolean;memberships:{tenant_id:string;role:'admin'|'viewer';name:string;status:string}[]};
@@ -34,11 +35,11 @@ export const requireSuper=(req:Request,res:Response,next:NextFunction)=>{
 export const tenant=(write=false)=>(req:Request,res:Response,next:NextFunction)=>{
   const id=req.header('x-tenant-id');
   if(!id||!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id))return res.status(400).json({error:'Selecione um ambiente'});
-  const m=req.actor?.memberships.find(x=>x.tenant_id===id);
-  if(!m && !req.actor?.superAdmin)return res.status(403).json({error:'Sem acesso a este ambiente'});
-  // Super Admin pode acessar qualquer tenant existente; a rota valida existência e status no banco.
-  req.tenantId=id;req.tenantRole=req.actor?.superAdmin?'admin':m?.role||'viewer';
-  if(write && req.tenantRole!=='admin')return res.status(403).json({error:'Perfil somente leitura'});
+  const role=tenantRoleFor(req.actor,id);
+  // Per-tenant "admin" never grants access to other tenants or platform roles.
+  if(!role)return res.status(403).json({error:'Sem acesso a este ambiente'});
+  req.tenantId=id;req.tenantRole=role;
+  if(write && role!=='admin')return res.status(403).json({error:'Perfil somente leitura'});
   next();
 };
 export const activeTenant=wrap(async(req,res,next)=>{
