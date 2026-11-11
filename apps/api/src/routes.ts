@@ -22,6 +22,7 @@ import {env} from './config.js';
 import {listVisibleTenants,listTenantOptions} from './tenant-list.js';
 import {loadDashboardTrend} from './dashboard-trend.js';
 import {memberInput,newPasswordInput,createTenantMember,resetTenantMemberPassword,finishFirstPasswordChange} from './member-accounts.js';
+import {tenantPermitted} from './tenant-authorization.js';
 
 export const router=Router();
 const upload=multer({storage:multer.memoryStorage(),limits:{fileSize:5*1024*1024,files:1},fileFilter:(_r,f,cb)=>{
@@ -135,7 +136,7 @@ router.get('/api/tenant-options',wrap(async(req,res)=>{
 }));
 router.get('/api/tenants/:id',wrap(async(req,res)=>{
  const id=uuid.parse(req.params.id);
- if(!req.actor!.superAdmin&&!req.actor!.memberships.some(m=>m.tenant_id===id))return res.status(403).json({error:'Sem acesso ao ambiente'});
+ if(!tenantPermitted(req.actor!,id))return res.status(403).json({error:'Sem acesso ao ambiente'});
  const found=await query('select id,name,slug,segment,timezone,status,created_at from tenants where id=$1',[id]);
  if(!found.rowCount)return res.status(404).json({error:'Ambiente não encontrado'});
  res.json(found.rows[0]);
