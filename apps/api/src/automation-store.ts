@@ -97,6 +97,62 @@ export async function setFlowStatus(tenantId:string,id:string,status:'active'|'p
   return changed.rows[0];
  });
 }
+/** Permanently remove an automation and its execution history.
+ * Pending side-effects are cancelled first, never silently allowed to send.
+ * Processing side-effects cannot safely be recalled, so refuse the delete.
+ */
+export async function deleteFlow(tenantId:string,id:string){
+ if(!uuidRe.test(id))throw new ApiOperationError(422,'Identificador inválido');
+ return withTransaction(async run=>{
+  await run('select pg_advisory_xact_lock(hashtext($1))',['automations:'+tenantId]);
+  const found=await run(
+   'select id,title from automation_flows where tenant_id=$1 and id=$2 for update',
+   [tenantId,id]
+  );
+  if(!found.rowCount)throw new ApiOperationError(404,'Automação não encontrada.');
+  const runs=await run(
+   'select id,status from automation_runs where tenant_id=$1 and flow_id=$2 for update',
+   [tenantId,id]
+  );
+  if(runs.rows.some(row=>row.status==='processing'))
+   throw new ApiOperationError(409,'Esta automação tem uma execução em andamento. Tente excluir depois que ela terminar.');
+  const sending=await run(
+   `select id,status from on_demand_messages where tenant_id=$1
+    and automation_run_id in(select id from automation_runs where tenant_id=$1 and flow_id=$2)
+    and status in ('queued','processing') for update`,[tenantId,id]
+  );
+  if(sending.rows.some(row=>row.status==='processing'))
+   throw new ApiOperationError(409,'Existe um envio WhatsApp em processamento. Aguarde antes de excluir a automação.');
+  const deliveries=await run(
+   `select id,status from outbound_webhook_deliveries where tenant_id=$1
+    and event_type='automation.triggered'
+    and event_id in(select id from automation_runs where tenant_id=$1 and flow_id=$2)
+    and status in ('queued','processing') for update`,[tenantId,id]
+  );
+  if(deliveries.rows.some(row=>row.status==='processing'))
+   throw new ApiOperationError(409,'Existe uma entrega webhook em processamento. Aguarde antes de excluir.');
+  const msgs=await run(
+   `update on_demand_messages set status='cancelled',error_code='FLOW_DELETED',
+    error_description='Automação excluída antes do envio',updated_at=now()
+    where tenant_id=$1 and status='queued'
+     and automation_run_id in(select id from automation_runs where tenant_id=$1 and flow_id=$2)
+    returning id`,[tenantId,id]
+  );
+  const out=await run(
+   `update outbound_webhook_deliveries set status='dead',
+    last_error='Automação excluída antes da entrega'
+    where tenant_id=$1 and event_type='automation.triggered' and status='queued'
+    and event_id in(select id from automation_runs where tenant_id=$1 and flow_id=$2)
+    returning id`,[tenantId,id]
+  );
+  // on delete cascade removes automation_runs; delivered/accepted messages
+  // remain in the provider histories and must not be retracted or re-sent.
+  await run('delete from automation_flows where tenant_id=$1 and id=$2',[tenantId,id]);
+  return {deleted:true,removed_runs:runs.rowCount||0,
+   cancelled_messages:msgs.rowCount||0,cancelled_webhooks:out.rowCount||0};
+ });
+}
+
 export async function listFlows(tenantId:string,page:unknown){
  const p=pageParams(page);
  const [rows,n]=await Promise.all([
