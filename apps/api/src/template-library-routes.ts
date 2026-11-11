@@ -21,7 +21,7 @@ templateLibraryRouter.get('/',wrap(async(req,res)=>{
  );
  // 12 modelos agora; paginação fixa para futuras ampliações da biblioteca.
  const page=Math.max(1,Math.min(10000,Number.parseInt(String(req.query.page||'1'),10)||1));
- res.json({items:result.slice((page-1)*20,page*20),total:result.length,page,pages:Math.ceil(result.length/20)});
+ res.json({items:result.slice((page-1)*50,page*50),total:result.length,page,pages:Math.ceil(result.length/50)});
 }));
 templateLibraryRouter.get('/:id',wrap(async(req,res)=>{
  const preset=findPreset(idSchema.parse(req.params.id));
