@@ -1,14 +1,98 @@
 import {useState,type FormEvent} from 'react';
-import {Mail,ShieldCheck,Trash2,UserRound,UserPlus} from 'lucide-react';
+import {Copy,KeyRound,Trash2} from 'lucide-react';
 import {useApp} from '../context';
 import {Button,Card,Empty,ErrorHint,Input,Modal,NewButton,PageTitle,Pagination,SubmitRow,formValues,useList} from '../components';
+
+type Credentials={email:string;temporary_password:string|null;created?:boolean};
 export function Members(){
  const {api,notify,tenantName}=useApp(),list=useList('/api/members');
  const [modal,setModal]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState('');
- async function invite(e:FormEvent<HTMLFormElement>){e.preventDefault();setBusy(true);setError('');const v=formValues(e);try{await api('/api/members',{method:'POST',body:JSON.stringify({email:v.email,role:v.role})});notify('Acesso provisionado. Convite enviado, quando aplicável.');setModal(false);list.refresh()}catch(e:any){setError(e.message)}finally{setBusy(false)}}
- async function remove(id:string){if(!window.confirm('Remover o acesso deste usuário ao ambiente?'))return;try{await api('/api/members/'+id,{method:'DELETE'});notify('Acesso removido');list.refresh()}catch(e:any){notify(e.message,'error')}}
- return <><PageTitle eyebrow="PLATAFORMA / SUPER ADMIN" title="Acessos" subtitle={'Gerencie quem pode acessar '+tenantName+'.'} action={<NewButton label="Convidar usuário" onClick={()=>setModal(true)}/>}/>
- <Card><div className="card-heading"><div><h2>Usuários do ambiente</h2><p>Apenas o Super Admin pode provisionar ou remover contas.</p></div></div><ErrorHint error={list.error}/>{list.data.items.length?<div className="data-list">{list.data.items.map((u:any)=><div className="data-row static-row" key={u.user_id}><span className="list-avatar">{u.email.slice(0,1).toUpperCase()}</span><span className="row-main"><strong>{u.email}</strong><small>{u.role==='admin'?'Administrador':'Visualizador'}</small></span><span className="status">{u.role==='admin'?'Admin':'Leitura'}</span><button className="icon-button" onClick={()=>remove(u.user_id)} title="Remover usuário"><Trash2 size={17}/></button></div>)}</div>:<Empty title="Sem usuários adicionais" subtitle="Convide um administrador ou visualizador para acessar este ambiente."/>}<Pagination page={list.page} pages={list.data.pages} onChange={list.setPage}/></Card>
- {modal&&<Modal title="Convidar usuário" onClose={()=>setModal(false)}><form className="form-stack" onSubmit={invite}><Input type="email" label="E-mail do usuário" name="email" placeholder="pessoa@empresa.com" required/><label className="field"><span>Permissão</span><select name="role"><option value="admin">Administrador — gerencia dados e integrações</option><option value="viewer">Visualizador — somente leitura</option></select></label><p className="hint">O convite utiliza o Supabase Auth. Configure o SMTP de produção no Supabase para entrega confiável dos e-mails.</p><ErrorHint error={error}/><SubmitRow busy={busy} label="Enviar convite" onCancel={()=>setModal(false)}/></form></Modal>}
+ const [credentials,setCredentials]=useState<Credentials|null>(null);
+ function close(){
+  if(busy)return;
+  setModal(false);setCredentials(null);setError('');
+ }
+ async function create(e:FormEvent<HTMLFormElement>){
+  e.preventDefault();setBusy(true);setError('');
+  const v=formValues(e);
+  try{
+   const result=await api('/api/members',{method:'POST',body:JSON.stringify({
+    name:v.name,email:v.email,role:v.role
+   })});
+   setCredentials(result);list.refresh();
+   notify(result.created?'Usuário criado com senha provisória.':'Conta existente vinculada ao ambiente.');
+  }catch(e:any){setError(e.message)}finally{setBusy(false)}
+ }
+ async function reset(userId:string,email:string){
+  if(!window.confirm('Redefinir a senha de '+email+'? A senha anterior deixará de funcionar e a troca será obrigatória.'))return;
+  setBusy(true);setError('');
+  try{
+   const result=await api('/api/members/'+userId+'/reset-password',{method:'POST'});
+   setCredentials({...result,created:true});setModal(true);
+   notify('Senha provisória gerada. Copie-a antes de fechar.');
+  }catch(e:any){notify(e.message,'error')}finally{setBusy(false)}
+ }
+ async function copy(){
+  if(!credentials?.temporary_password)return;
+  try{
+   await navigator.clipboard.writeText(
+    'BR Notify: https://painel.bridgesolucoes.com.br\nE-mail: '+credentials.email+
+    '\nSenha provisória: '+credentials.temporary_password+
+    '\nTroque a senha no primeiro acesso.'
+   );
+   notify('Credenciais copiadas. Compartilhe por um canal seguro.');
+  }catch{setError('Não foi possível copiar automaticamente. Selecione a senha e copie manualmente.')}
+ }
+ async function remove(id:string){
+  if(!window.confirm('Remover o acesso deste usuário ao ambiente?'))return;
+  try{await api('/api/members/'+id,{method:'DELETE'});notify('Acesso removido');list.refresh()}
+  catch(e:any){notify(e.message,'error')}
+ }
+ return <>
+  <PageTitle eyebrow="PLATAFORMA / SUPER ADMIN" title="Acessos"
+   subtitle={'Gerencie os usuários de '+tenantName+'.'}
+   action={<NewButton label="Novo usuário" onClick={()=>{setModal(true);setError('');setCredentials(null)}}/>}/>
+  <Card><div className="card-heading"><div><h2>Usuários do ambiente</h2>
+   <p>Crie contas sem SMTP, defina permissões ou redefina senhas provisórias.</p></div></div>
+   <ErrorHint error={list.error}/>
+   {list.data.items.length?<div className="data-list">
+    {list.data.items.map((u:any)=><div className="data-row static-row" key={u.user_id}>
+     <span className="list-avatar">{u.email.slice(0,1).toUpperCase()}</span>
+     <span className="row-main"><strong>{u.email}</strong><small>{u.role==='admin'?'Administrador':'Visualizador'}</small></span>
+     <span className="status">{u.role==='admin'?'Admin':'Leitura'}</span>
+     <button className="icon-button" disabled={busy} onClick={()=>void reset(u.user_id,u.email)}
+      title="Gerar nova senha provisória" aria-label={'Redefinir senha de '+u.email}><KeyRound size={17}/></button>
+     <button className="icon-button" disabled={busy} onClick={()=>void remove(u.user_id)}
+      title="Remover usuário" aria-label={'Remover '+u.email}><Trash2 size={17}/></button>
+    </div>)}
+   </div>:<Empty title="Sem usuários adicionais" subtitle="Crie um usuário para acessar este ambiente."/>}
+   <Pagination page={list.page} pages={list.data.pages} onChange={list.setPage}/>
+  </Card>
+  {modal&&<Modal title={credentials?'Acesso provisionado':'Novo usuário'} onClose={close}>
+   {credentials?<div className="form-stack">
+    <p>{credentials.temporary_password
+     ?'Copie e compartilhe estas credenciais por um canal seguro. A senha só aparece agora e deverá ser trocada no primeiro acesso.'
+     :'Este e-mail já possui uma conta no Supabase. O acesso ao ambiente foi concedido sem alterar a senha existente.'}</p>
+    <label className="field"><span>E-mail</span><input readOnly value={credentials.email}/></label>
+    {credentials.temporary_password&&<>
+     <label className="field"><span>Senha provisória</span><input readOnly value={credentials.temporary_password}
+      onFocus={e=>e.currentTarget.select()}/></label>
+     <Button secondary onClick={()=>void copy()}><Copy size={17}/> Copiar dados de acesso</Button>
+    </>}
+    <ErrorHint error={error}/>
+    <div className="form-footer"><Button onClick={close}>Concluir</Button></div>
+   </div>
+   :<form className="form-stack" onSubmit={create}>
+    <Input name="name" label="Nome completo" placeholder="Nome do usuário" required/>
+    <Input name="email" type="email" label="E-mail" placeholder="pessoa@empresa.com.br" required/>
+    <label className="field"><span>Permissão</span><select name="role">
+     <option value="admin">Administrador — gerencia dados e integrações</option>
+     <option value="viewer">Visualizador — somente leitura</option>
+    </select></label>
+    <p className="hint">Se o e-mail for novo, o Supabase criará a conta sem SMTP e uma senha provisória será exibida uma única vez. Se já existir, apenas concederemos acesso ao ambiente.</p>
+    <ErrorHint error={error}/>
+    <SubmitRow busy={busy} label="Criar acesso" onCancel={close}/>
+   </form>}
+  </Modal>}
  </>;
 }
