@@ -27,7 +27,7 @@ export const query=(sql:string,params:unknown[]=[])=>(pool.query(sql,params));
 export const pageParams=(input:unknown)=>{
   const value=Number(input ?? 1);
   const page=Number.isFinite(value)?Math.max(1,Math.floor(value)):1;
-  return {page,limit:20,offset:(page-1)*20};
+  return {page,limit:50,offset:(page-1)*50};
 };
 export const makeSlug=(v:string)=>v.normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,45);
 export const audit=async(tenantId:string|null,userId:string|null,action:string,detail:object={})=>{
