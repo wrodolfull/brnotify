@@ -10,11 +10,12 @@ type Trigger='message.received'|'message.delivery.updated'|'call.ended'|'call.re
 type Action='internal'|'webhook'|'whatsapp';
 type Form={
  title:string;trigger_type:Trigger;match_mode:'any'|'equals'|'contains';match_text:string;
+ source_template_id:string|null;
  delay_minutes:number;check_no_new_message:boolean;
  action_type:Action;action_label:string;endpoint_id:string|null;template_id:string|null;
  template_variables:Record<string,string>
 };
-const blank:Form={title:'',trigger_type:'message.received',match_mode:'any',match_text:'',
+const blank:Form={title:'',trigger_type:'message.received',match_mode:'any',match_text:'',source_template_id:null,
  delay_minutes:0,check_no_new_message:false,action_type:'internal',action_label:'Avisar a equipe',
  endpoint_id:null,template_id:null,template_variables:{}};
 const triggers=[
@@ -64,7 +65,7 @@ function fieldsFor(template:any):Array<{key:string;example:string}>{
 }
 const fromSaved=(f:any):Form=>({
  title:f.title||'',trigger_type:f.trigger_type,match_mode:f.match_mode||'any',
- match_text:f.match_text||'',delay_minutes:f.delay_minutes||0,
+ match_text:f.match_text||'',source_template_id:f.source_template_id||null,delay_minutes:f.delay_minutes||0,
  check_no_new_message:!!f.check_no_new_message,action_type:f.action_type,
  action_label:f.action_label||'Avisar a equipe',endpoint_id:f.endpoint_id||null,
  template_id:f.template_id||null,template_variables:f.template_variables||{}
@@ -101,6 +102,7 @@ export function WorkflowAutomations(){
   e.preventDefault();setError('');setBusy(true);
   try{
    const body={...form,match_text:form.match_mode==='any'?null:form.match_text,
+    source_template_id:form.trigger_type==='message.received'?form.source_template_id:null,
     endpoint_id:form.action_type==='webhook'?form.endpoint_id:null,
     template_id:form.action_type==='whatsapp'?form.template_id:null,
     template_variables:form.action_type==='whatsapp'?form.template_variables:{}};
@@ -132,7 +134,7 @@ export function WorkflowAutomations(){
   }catch(e:any){setError(e.message)}finally{setBusy(false)}
  }
  function triggerSelect(t:Trigger){
-  setForm(v=>({...v,trigger_type:t,match_mode:t==='message.received'?v.match_mode:'any',
+  setForm(v=>({...v,trigger_type:t,source_template_id:t==='message.received'?v.source_template_id:null,match_mode:t==='message.received'?v.match_mode:'any',
    match_text:t==='message.received'?v.match_text:'',
    check_no_new_message:t==='message.received'?v.check_no_new_message:false,
    action_type:t==='message.received'?v.action_type:v.action_type==='whatsapp'?'internal':v.action_type,
@@ -188,6 +190,8 @@ export function WorkflowAutomations(){
       {triggers.map(t=><option value={t.value} key={t.value}>{t.label}</option>)}
      </select></label>
      {isWhatsapp&&<>
+      <label className="field"><span>Associar a qual template enviado?</span><select value={form.source_template_id||''} onChange={e=>update('source_template_id',e.target.value||null)}><option value="">Qualquer resposta (modo anterior)</option>{options.templates.map(t=><option key={t.id} value={t.id}>{t.name} ({t.language_code})</option>)}</select></label>
+      <p className="wf-hint">Se escolher um template, a resposta só ativa o fluxo quando houver exatamente um envio recente (até 7 dias) associado a esse número. Se houver envios concorrentes, o BR Notify não executa o fluxo por segurança.</p>
       <label className="field"><span>Qual resposta deve iniciar?</span><select value={form.match_mode} onChange={e=>update('match_mode',e.target.value as Form['match_mode'])}>
        <option value="any">Qualquer resposta</option><option value="equals">Resposta igual a</option><option value="contains">Resposta contém</option>
       </select></label>

@@ -8,15 +8,19 @@ const fromRow=(flow:any)=>flowSchema.parse({
  match_text:flow.match_text,delay_minutes:flow.delay_minutes,
  check_no_new_message:flow.check_no_new_message,action_type:flow.action_type,
  action_label:flow.action_label,endpoint_id:flow.endpoint_id,
- template_id:flow.template_id,template_variables:flow.template_variables
+ template_id:flow.template_id,source_template_id:flow.source_template_id,template_variables:flow.template_variables
 });
 const stored=(input:FlowInput)=>[
  input.title,input.trigger_type,input.match_mode,input.match_text||null,input.delay_minutes,
  input.check_no_new_message,input.action_type,input.action_label,input.endpoint_id||null,
- input.template_id||null,JSON.stringify(input.template_variables)
+ input.template_id||null,JSON.stringify(input.template_variables),input.source_template_id||null
 ];
 
 export async function ensureFlowDependencies(tenantId:string,input:FlowInput){
+ if(input.source_template_id){
+  const origin=await query("select id from message_templates where tenant_id=$1 and id=$2",[tenantId,input.source_template_id]);
+  if(!origin.rowCount)throw new ApiOperationError(422,'O template de origem não existe neste ambiente.');
+ }
  if(input.action_type==='webhook'){
   const ep=await query('select active from outbound_webhook_endpoints where tenant_id=$1 and id=$2',[tenantId,input.endpoint_id]);
   if(!ep.rows[0]?.active)throw new ApiOperationError(422,'O webhook precisa existir e estar ativo neste ambiente.');
@@ -39,8 +43,8 @@ export async function createFlow(tenantId:string,raw:unknown){
   if(Number(count.rows[0].total)>=40)throw new ApiOperationError(409,'Limite de 40 automações por ambiente.');
   const saved=await run(
    `insert into automation_flows(tenant_id,title,trigger_type,match_mode,match_text,delay_minutes,
-    check_no_new_message,action_type,action_label,endpoint_id,template_id,template_variables)
-    values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) returning *`,
+    check_no_new_message,action_type,action_label,endpoint_id,template_id,template_variables,source_template_id)
+    values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) returning *`,
    [tenantId,...stored(data)]
   );
   return saved.rows[0];
@@ -57,7 +61,7 @@ export async function updateFlow(tenantId:string,id:string,raw:unknown){
   const updated=await run(
    `update automation_flows set title=$3,trigger_type=$4,match_mode=$5,match_text=$6,
     delay_minutes=$7,check_no_new_message=$8,action_type=$9,action_label=$10,
-    endpoint_id=$11,template_id=$12,template_variables=$13,revision=revision+1,updated_at=now()
+    endpoint_id=$11,template_id=$12,template_variables=$13,source_template_id=$14,revision=revision+1,updated_at=now()
     where tenant_id=$1 and id=$2 returning *`,
    [tenantId,id,...stored(data)]
   );
