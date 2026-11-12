@@ -1,7 +1,7 @@
 import {useEffect,useMemo,useState,type FormEvent} from 'react';
 import {Link} from 'react-router-dom';
 import {useApp} from '../context';
-import {Button,Card,Empty,ErrorHint,PageTitle,Pagination,Status,useList} from '../components';
+import {Button,Card,Empty,ErrorHint,PageTitle,Pagination,Status,useList,useCachedData} from '../components';
 import {fmtDate} from '../api';
 
 type Template={id:string;name:string;language_code:string;definition:any;variable_map:Record<string,string>|null};
@@ -46,7 +46,8 @@ export function Notifications({initialMode='choose'}:{initialMode?:Mode}){
  const {api,role,notify}=useApp();
  const canEdit=role==='admin';
  const [mode,setMode]=useState<Mode>(initialMode);
- const [templates,setTemplates]=useState<Template[]>([]);
+ const templateQuery=useCachedData<{items:Template[]}>('/api/notifications/templates');
+ const templates=templateQuery.data?.items||[];
  const [templateId,setTemplateId]=useState('');
  const [contactSearch,setContactSearch]=useState('');
  const [contacts,setContacts]=useState<any[]>([]);
@@ -71,11 +72,6 @@ export function Notifications({initialMode='choose'}:{initialMode?:Mode}){
  const mediaField=fields.some(f=>f.kind==='media');
  const mediaReady=!mediaField||!!template?.variable_map?.['header.media']?.startsWith('asset:');
 
- useEffect(()=>{
-  let alive=true;
-  api('/api/notifications/templates').then(x=>{if(alive)setTemplates(x.items||[])}).catch(e=>{if(alive)setError(e.message)});
-  return()=>{alive=false};
- },[api]);
  useEffect(()=>{
   if(mode!=='single')return;
   let alive=true;
