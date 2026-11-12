@@ -1,7 +1,7 @@
 import {useEffect,useMemo,useState,type FormEvent} from 'react';
 import {Link} from 'react-router-dom';
 import {useApp} from '../context';
-import {Button,Card,Empty,ErrorHint,PageTitle,Pagination,useList} from '../components';
+import {Button,Card,Empty,ErrorHint,Loader,PageTitle,Pagination,useList} from '../components';
 import {fmtDate} from '../api';
 
 type Trigger='message.received'|'message.delivery.updated'|'call.ended'|'call.report.ready'|
@@ -171,7 +171,7 @@ export function WorkflowAutomations(){
       {canEdit&&<Button disabled={busy} secondary={f.status==='active'} onClick={()=>void changeStatus(f)}>{f.status==='active'?'Pausar':'Ativar'}</Button>}
       {canEdit&&<Button danger secondary disabled={busy} onClick={()=>void removeFlow(f)}>Excluir</Button>}
      </div>
-    </div>)}</div>:<Empty title="Nenhuma automação criada" subtitle="Crie uma regra simples a partir de um exemplo ou configure a sua."/>}
+    </div>)}</div>:flows.loading?<Loader/>:<Empty title="Nenhuma automação criada" subtitle="Crie uma regra simples a partir de um exemplo ou configure a sua."/>}
     <Pagination page={flows.page} pages={flows.data.pages} onChange={flows.setPage}/>
    </Card>
    <p className="wf-footnote">As regras antigas de lembretes continuam separadas. <Link to="/automations">Configurar lembretes de compromissos</Link>.</p>
@@ -279,7 +279,7 @@ export function WorkflowAutomations(){
      {r.result?.kind==='internal'&&<small>{r.result.label}</small>}
      {r.reason&&<p className="notify-alert">{r.reason}</p>}
     </div>
-   </div>)}</div>:<Empty title="Ainda não há execuções" subtitle="Quando uma automação ativa identificar um novo evento, o histórico aparecerá aqui."/>}
+   </div>)}</div>:runs.loading?<Loader/>:<Empty title="Ainda não há execuções" subtitle="Quando uma automação ativa identificar um novo evento, o histórico aparecerá aqui."/>}
    <ErrorHint error={runs.error}/>
    <Pagination page={runs.page} pages={runs.data.pages} onChange={runs.setPage}/>
   </Card>}
