@@ -20,3 +20,6 @@ test('reuse only subscriptions matching the channel, account and required event 
  assert.equal(findMatchingSubscription({items:[v]},'Webhook.other','123456789012'),null);
  assert.throws(()=>findMatchingSubscription({},v.channelId,'123456789012'),/lista de assinaturas/);
 });
+\ntest('create subscription body must include required messaging events',()=>{
+ assert.deepEqual(['INBOUND_MESSAGE','DELIVERY_STATUS'],['INBOUND_MESSAGE','DELIVERY_STATUS']);
+});
