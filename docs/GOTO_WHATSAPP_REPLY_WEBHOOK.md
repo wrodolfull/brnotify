@@ -1,0 +1,26 @@
+# GoTo WhatsApp — recebimento de respostas com um clique
+
+## Configuração
+1. Conecte a GoTo como **Super Admin**. O token OAuth deve incluir `messaging.v1.notifications.manage`.
+2. Configure o Account Key e o ID numérico do número WhatsApp.
+3. Configure o backend: `API_URL=https://api.seu-dominio.com` e `GOTO_WEBHOOK_SECRET` com pelo menos 24 caracteres. O segredo é privado; não pertence ao frontend.
+4. Exponha `/api/webhooks/goto/` no Nginx por HTTPS/443 e permita OPTIONS e POST. A GoTo verifica a URL antes de criar o canal.
+5. Aplique `database/016_goto_message_notifications.sql`, após a 015. Implante API e frontend.
+
+No menu **Integração GoTo**, selecione **Ativar recebimento de respostas**. O BR Notify cria um canal Webhook com nome estável por ambiente e assina `INBOUND_MESSAGE` e `DELIVERY_STATUS`. Uma assinatura já cadastrada pode ser verificada e reutilizada. A operação é protegida contra cliques simultâneos.
+
+O status da tela reflete a assinatura **cadastrada**, não a garantia de chegada das mensagens. Faça um teste real: envie um template, responda no WhatsApp e confira `message.received` em Atividades e a execução em Automações.
+
+### Falhas
+- `403`: a GoTo pode exigir Super Admin ou retornar bloqueio pelo gateway/CDN. O BR Notify apresenta erro sanitizado e referência da requisição, quando disponível.
+- Falha de canal: confirme HTTPS público, encaminhamento correto no Nginx e acesso externo ao endpoint.
+- Falha ao assinar: revise permissões do usuário OAuth e o Account Key. Clique novamente para retomar.
+- O vínculo da assinatura GoTo é com o usuário utilizado; ao reautorizar ou alterar o Account Key, revise e ative novamente.
+
+### Rotas
+- `GET /api/goto/notifications/status` — estado por ambiente, sem expor segredos.
+- `POST /api/goto/notifications/activate` — ativação automática apenas para administradores do ambiente.
+- `POST /api/goto/notifications/subscribe` — opção manual em Configuração avançada.
+
+### Segurança e limites
+A URL do webhook é montada exclusivamente a partir de variáveis de ambiente do backend, nunca recebida do navegador. A GoTo confirma canal e assinatura via APIs; não foi possível executar teste com credenciais GoTo reais no CI. A desconexão local não revoga automaticamente canais e assinaturas remotas.
