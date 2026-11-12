@@ -1,11 +1,11 @@
-import {useEffect,useMemo,useState} from 'react';
+import {useMemo,useState} from 'react';
 import {
  Activity,AlertTriangle,ArrowDownToLine,ArrowRight,BarChart3,CalendarDays,
  CheckCheck,ChevronDown,Clock3,FileSpreadsheet,Filter,Link2,RefreshCw,
  Search,Send,Users,Webhook
 } from 'lucide-react';
 import {useApp} from '../context';
-import {Button,Card,Empty,ErrorHint,Loader,PageTitle,Pagination} from '../components';
+import {Button,Card,Empty,ErrorHint,Loader,PageTitle,Pagination,useCachedData} from '../components';
 import {fmtDate,fmtNum} from '../api';
 
 type Kind='all'|'message'|'appointment'|'confirmation'|'webhook'|'api'|'import';
@@ -107,36 +107,21 @@ function Trend({summary}:{summary:Summary}){
  </Card>;
 }
 export function Reports(){
- const {api,tenantId,notify}=useApp();
+ const {api,notify}=useApp();
  const [draft,setDraft]=useState<ReportFilters>(initial);
  const [applied,setApplied]=useState<ReportFilters>(initial);
  const [page,setPage]=useState(1);
- const [summary,setSummary]=useState<Summary|null>(null);
- const [summaryError,setSummaryError]=useState('');
- const [summaryLoading,setSummaryLoading]=useState(true);
- const [activities,setActivities]=useState<Activities>({items:[],total:0,page:1,pages:1});
- const [activityError,setActivityError]=useState('');
- const [activityLoading,setActivityLoading]=useState(true);
  const [downloading,setDownloading]=useState(false);
- const [revision,setRevision]=useState(0);
  const rangeQuery=useMemo(()=>queryFilters(applied),[applied]);
  const activityQuery=useMemo(()=>queryFilters(applied,true),[applied]);
- const urlPath=(path:string,search:string)=>path+'?'+search;
- useEffect(()=>{
-  let alive=true;setSummaryLoading(true);setSummaryError('');
-  api(urlPath('/api/reports',rangeQuery)).then(result=>{if(alive)setSummary(result)})
-   .catch(e=>{if(alive){setSummary(null);setSummaryError(e.message)}})
-   .finally(()=>{if(alive)setSummaryLoading(false)});
-  return()=>{alive=false};
- },[api,rangeQuery,revision,tenantId]);
- useEffect(()=>{
-  let alive=true;setActivityLoading(true);setActivityError('');
-  const params=new URLSearchParams(activityQuery);params.set('page',String(page));
-  api('/api/reports/activity?'+params.toString()).then(result=>{if(alive)setActivities(result)})
-   .catch(e=>{if(alive){setActivityError(e.message);setActivities({items:[],total:0,page,pages:1})}})
-   .finally(()=>{if(alive)setActivityLoading(false)});
-  return()=>{alive=false};
- },[api,activityQuery,page,revision,tenantId]);
+ const activityParams=new URLSearchParams(activityQuery);
+ activityParams.set('page',String(page));
+ const summaryRequest=useCachedData<Summary>('/api/reports?'+rangeQuery);
+ const activityRequest=useCachedData<Activities>('/api/reports/activity?'+activityParams.toString());
+ const summary=summaryRequest.data??null;
+ const summaryError=summaryRequest.error,summaryLoading=summaryRequest.loading;
+ const activities=activityRequest.data??{items:[],total:0,page:1,pages:1};
+ const activityError=activityRequest.error,activityLoading=activityRequest.loading;
  const apply=()=>{
   if(draft.days==='custom'&&(!draft.from||!draft.to)){
    notify('Selecione as datas inicial e final para um período personalizado','error');
@@ -148,7 +133,7 @@ export function Reports(){
   }
   setPage(1);setApplied({...draft});
  };
- const reset=()=>{setPage(1);setDraft(initial);setApplied(initial);setRevision(v=>v+1)};
+ const reset=()=>{setPage(1);setDraft(initial);setApplied(initial);summaryRequest.refresh();activityRequest.refresh()};
  const download=async()=>{
   setDownloading(true);
   try{
@@ -169,7 +154,7 @@ export function Reports(){
  return <div className="report-page">
   <PageTitle eyebrow="ANÁLISE / OPERAÇÃO" title="Relatório geral"
    subtitle="Agendamentos, mensagens, confirmações e integrações em uma única visão."
-   action={<div className="report-heading-actions"><Button secondary onClick={()=>setRevision(x=>x+1)}><RefreshCw size={17}/> Atualizar</Button><Button onClick={download} disabled={downloading||!summary}><ArrowDownToLine size={17}/>{downloading?'Exportando...':'Exportar CSV'}</Button></div>}/>
+   action={<div className="report-heading-actions"><Button secondary onClick={()=>{summaryRequest.refresh();activityRequest.refresh()}}><RefreshCw size={17}/> Atualizar</Button><Button onClick={download} disabled={downloading||!summary}><ArrowDownToLine size={17}/>{downloading?'Exportando...':'Exportar CSV'}</Button></div>}/>
   <Card className="report-filter-card">
    <div className="report-filter-heading"><span><Filter size={17}/> Filtros do relatório</span><small>Todos os indicadores respeitam o período selecionado</small></div>
    <div className="report-filters">

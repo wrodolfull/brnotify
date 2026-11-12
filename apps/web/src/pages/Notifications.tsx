@@ -1,7 +1,7 @@
 import {useEffect,useMemo,useState,type FormEvent} from 'react';
 import {Link} from 'react-router-dom';
 import {useApp} from '../context';
-import {Button,Card,Empty,ErrorHint,PageTitle,Pagination,Status,useList} from '../components';
+import {Button,Card,Empty,ErrorHint,PageTitle,Pagination,Status,useList,useCachedData} from '../components';
 import {fmtDate} from '../api';
 
 type Template={id:string;name:string;language_code:string;definition:any;variable_map:Record<string,string>|null};
@@ -46,7 +46,8 @@ export function Notifications({initialMode='choose'}:{initialMode?:Mode}){
  const {api,role,notify}=useApp();
  const canEdit=role==='admin';
  const [mode,setMode]=useState<Mode>(initialMode);
- const [templates,setTemplates]=useState<Template[]>([]);
+ const templateQuery=useCachedData<{items:Template[]}>('/api/notifications/templates',mode!=='history');
+ const templates=templateQuery.data?.items||[];
  const [templateId,setTemplateId]=useState('');
  const [contactSearch,setContactSearch]=useState('');
  const [contacts,setContacts]=useState<any[]>([]);
@@ -71,11 +72,6 @@ export function Notifications({initialMode='choose'}:{initialMode?:Mode}){
  const mediaField=fields.some(f=>f.kind==='media');
  const mediaReady=!mediaField||!!template?.variable_map?.['header.media']?.startsWith('asset:');
 
- useEffect(()=>{
-  let alive=true;
-  api('/api/notifications/templates').then(x=>{if(alive)setTemplates(x.items||[])}).catch(e=>{if(alive)setError(e.message)});
-  return()=>{alive=false};
- },[api]);
  useEffect(()=>{
   if(mode!=='single')return;
   let alive=true;
@@ -165,7 +161,9 @@ export function Notifications({initialMode='choose'}:{initialMode?:Mode}){
      </select></label>
      {textFields.map(f=><label className="field" key={f.key}><span>{f.label}</span><input required maxLength={1024} placeholder={f.example||'Digite o valor desta variável'} value={variables[f.key]||''} onChange={e=>setVariables(v=>({...v,[f.key]:e.target.value}))}/></label>)}
      {mediaField&&!mediaReady&&<p className="notify-alert">Este modelo precisa de uma mídia configurada em GoTo Connect antes do envio.</p>}
-     {!templates.length&&<p className="notify-alert">Nenhum modelo aprovado disponível. Conecte a GoTo e sincronize os modelos em GoTo Connect.</p>}
+     {templateQuery.loading&&<p className="muted">Carregando modelos de WhatsApp...</p>}
+     <ErrorHint error={templateQuery.error}/>
+     {!templateQuery.loading&&!templates.length&&<p className="notify-alert">Nenhum modelo aprovado disponível. Conecte a GoTo e sincronize os modelos em GoTo Connect.</p>}
     </div>
     <div className="notify-section"><h2>3. Quando enviar?</h2>
      <div className="notify-radio-row">

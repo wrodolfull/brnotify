@@ -1,7 +1,7 @@
 import {useState,type FormEvent} from 'react';
 import {Copy,KeyRound,Trash2} from 'lucide-react';
 import {useApp} from '../context';
-import {Button,Card,Empty,ErrorHint,Input,Modal,NewButton,PageTitle,Pagination,SubmitRow,formValues,useList} from '../components';
+import {Button,Card,Empty,ErrorHint,Input,Loader,Modal,NewButton,PageTitle,Pagination,SubmitRow,formValues,useList} from '../components';
 
 type Credentials={email:string;temporary_password:string|null;created?:boolean};
 export function Members(){
@@ -66,7 +66,7 @@ export function Members(){
      <button className="icon-button" disabled={busy} onClick={()=>void remove(u.user_id)}
       title="Remover usuário" aria-label={'Remover '+u.email}><Trash2 size={17}/></button>
     </div>)}
-   </div>:<Empty title="Sem usuários adicionais" subtitle="Crie um usuário para acessar este ambiente."/>}
+   </div>:list.loading?<Loader/>:<Empty title="Sem usuários adicionais" subtitle="Crie um usuário para acessar este ambiente."/>}
    <Pagination page={list.page} pages={list.data.pages} onChange={list.setPage}/>
   </Card>
   {modal&&<Modal title={credentials?'Acesso provisionado':'Novo usuário'} onClose={close}>
