@@ -70,6 +70,7 @@ function Workspace({sessionRef}:{sessionRef:RefObject<Session|null>}){
   const paths:Record<string,string>={
    '/':'/api/dashboard',
    '/contacts':'/api/contacts?state=active&q=&page=1',
+   '/notifications':'/api/notifications/templates',
    '/flows':'/api/automation-flows?page=1',
    '/activities':'/api/notifications/history?revision=0&page=1',
    '/reports':'/api/reports?days=30',
