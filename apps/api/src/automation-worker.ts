@@ -2,7 +2,7 @@ import {pool,query} from './db.js';
 import {matchesFlow,interpolateVariables,type EventForFlow} from './automation-model.js';
 import {enqueuePanelNotification} from './panel-notifications.js';
 import {phoneE164} from './time.js';
-import {resolveRecentReplySource} from './reply-source.js';
+import {resolveRecentReplySource,diagnoseUnmatchedReply} from './reply-source.js';
 
 const ZERO='00000000-0000-0000-0000-000000000000';
 /** Dispatch scanning is transactional: cursor and queued runs commit together. */
@@ -40,7 +40,7 @@ export async function scanAutomationEvents(){
      // Never infer a template when multiple sends might have prompted the reply.
      if(!source||source.templateId!==flow.source_template_id){
       const reason=!source
-       ? 'Resposta recebida, mas não foi encontrado um único envio anterior desse número nos últimos 7 dias.'
+       ? await diagnoseUnmatchedReply(client,flow.tenant_id,phone,event.occurred_at)
        : 'Resposta recebida, mas o template de origem difere do selecionado nesta automação.';
       // Store a skipped execution instead of silently dropping a valid text match.
       const skipped=await client.query(

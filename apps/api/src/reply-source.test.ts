@@ -30,3 +30,32 @@ test('fails closed on missing or ambiguous message history',async()=>{
  assert.equal(await resolveRecentReplySource(client([]),id,'invalid-phone',at),null);
  assert.equal(await resolveRecentReplySource(client([]),id,'11991234567','invalid-date'),null);
 });
+
+const {diagnoseUnmatchedReply}=await import('./reply-source.js');
+function diagnosticClient(candidateRows:unknown[],historyRows:unknown[]=[]){
+ let count=0;
+ return {query:async (sql:string)=>{
+  count++;
+  if(count===1){assert.match(sql,/interval '7 days'/);return {rows:candidateRows,rowCount:candidateRows.length}}
+  assert.match(sql,/from on_demand_messages where tenant_id=\$1 and recipient_phone=\$2/);
+  return {rows:historyRows,rowCount:historyRows.length}
+ }} as any;
+}
+test('distinguishes ambiguous URA sends from missing messages',async()=>{
+ const ambiguous=await diagnoseUnmatchedReply(diagnosticClient([
+  {kind:'panel',template_id:'tpl',id:'a'},
+  {kind:'panel',template_id:'tpl',id:'b'}
+ ]),id,'11991234567',at);
+ assert.match(ambiguous,/pelo menos dois disparos aceitos/);
+ const missing=await diagnoseUnmatchedReply(diagnosticClient([]),id,'11991234567',at);
+ assert.match(missing,/Não foi encontrado disparo da URA/);
+});
+test('explains pending sends, invalid WhatsApp identity and mismatched timestamps',async()=>{
+ const pending=await diagnoseUnmatchedReply(diagnosticClient([],[{status:'queued',sent_at:null,provider_message_id:null}]),
+  id,'11991234567',at);
+ assert.match(pending,/fila ou em processamento/);
+ const future=await diagnoseUnmatchedReply(diagnosticClient([],[{status:'sent',sent_at:'2026-11-12T16:00:00Z',provider_message_id:'msg'}]),
+  id,'11991234567',at);
+ assert.match(future,/posterior ao horário informado/);
+ assert.match(await diagnoseUnmatchedReply(diagnosticClient([]),id,'invalid-phone',at),/não pode ser interpretado/);
+});

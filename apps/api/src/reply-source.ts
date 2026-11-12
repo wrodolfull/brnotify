@@ -31,3 +31,56 @@ export async function resolveRecentReplySource(client:Pick<PoolClient,'query'>,t
  const candidate=result.rows[0];
  return {kind:candidate.kind,templateId:candidate.template_id,messageId:candidate.id};
 }
+
+/** Explain why an inbound reply was not associated, without revealing a contact phone number. */
+export async function diagnoseUnmatchedReply(client:Pick<PoolClient,'query'>,tenantId:string,rawPhone:unknown,rawAt:unknown):Promise<string>{
+ let phone:string;
+ try{phone=phoneE164(rawPhone)}
+ catch{return 'A GoTo informou um identificador de destinatário que não pode ser interpretado como telefone E.164. Confira o autor da mensagem recebida.'}
+ const at=new Date(String(rawAt||''));
+ if(!Number.isFinite(at.getTime()))return 'A GoTo enviou uma data de resposta inválida; não é seguro relacionar ao disparo.';
+ const candidates=await client.query(`
+  select kind,template_id,id from (
+   select 'panel' as kind,m.template_id,m.id,m.sent_at
+    from on_demand_messages m where m.tenant_id=$1 and m.recipient_phone=$2
+    and m.provider_message_id is not null and m.sent_at is not null
+    and m.status in ('sent','delivered')
+   union all
+   select 'reminder' as kind,m.template_id,m.id,m.sent_at
+    from scheduled_messages m join events e on e.id=m.event_id and e.tenant_id=m.tenant_id
+    join contacts c on c.id=e.contact_id and c.tenant_id=e.tenant_id
+    where m.tenant_id=$1 and c.phone=$2 and m.goto_message_id is not null
+    and m.sent_at is not null and m.status in ('sent','delivered')
+  ) candidates where sent_at<=$3::timestamptz
+   and sent_at>$3::timestamptz-interval '7 days'
+  order by sent_at desc,id desc limit 2`,[tenantId,phone,at.toISOString()]);
+ if(candidates.rows.length>1)
+  return 'Há pelo menos dois disparos aceitos para este número nos últimos 7 dias. A resposta é ambígua: o BR Notify não escolherá um template automaticamente.';
+ if(candidates.rows.length===1&&!candidates.rows[0].template_id)
+  return 'Foi encontrado um único envio, mas seu template de origem não está mais disponível no histórico.';
+ if(candidates.rows.length===1)
+  return 'O único envio encontrado não corresponde ao template selecionado nesta automação.';
+ // Check the most recent IVR/panel sends even if they were not accepted or fell outside the time window.
+ const history=await client.query(`
+  select status,sent_at,provider_message_id,template_id
+  from on_demand_messages where tenant_id=$1 and recipient_phone=$2
+  order by created_at desc limit 15`,[tenantId,phone]);
+ if(!history.rowCount)
+  return 'Não foi encontrado disparo da URA ou do painel para o número recebido. Confira se o número de origem informado pela GoTo corresponde ao destinatário registrado no mesmo ambiente.';
+ const rows=history.rows as Array<{status:string;sent_at:Date|string|null;provider_message_id:string|null;template_id:string|null}>;
+ const accepted=rows.filter(r=>['sent','delivered'].includes(r.status)&&r.provider_message_id&&r.sent_at);
+ if(accepted.length){
+  const before=accepted.filter(r=>new Date(r.sent_at!).getTime()<=at.getTime());
+  if(!before.length)return 'Foram encontrados disparos, mas o horário de envio é posterior ao horário informado na resposta pela GoTo. Confira datas e processamento.';
+  if(before.every(r=>new Date(r.sent_at!).getTime()<=at.getTime()-7*86400000))
+   return 'Os disparos aceitos encontrados para esse número são anteriores à janela de 7 dias da automação.';
+  return 'Existem disparos registrados, mas nenhum atende simultaneamente aos critérios de data, status aceito e identificador GoTo.';
+ }
+ if(rows.some(r=>r.status==='queued'||r.status==='processing'))
+  return 'Existe disparo para esse número, mas ele ainda está na fila ou em processamento, sem confirmação de envio pela GoTo.';
+ if(rows.some(r=>r.status==='failed'||r.status==='cancelled'))
+  return 'Existem disparos para esse número, mas estão com falha ou cancelados. Verifique o histórico de disparos da URA.';
+ if(rows.some(r=>r.status==='unknown'))
+  return 'O último envio desse número tem resultado indeterminado. É necessário conciliar o identificador da GoTo antes de automatizar a resposta.';
+ return 'Há um registro de envio para esse número, porém falta status de envio aceito, horário ou identificador GoTo para associar a resposta.';
+}
