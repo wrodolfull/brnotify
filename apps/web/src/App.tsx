@@ -5,6 +5,7 @@ import {Bell,Building2,ChevronDown,LayoutDashboard,Clock3,LogOut,Menu,Send,Setti
 import {supabase,callAPI,type Actor} from './api';
 import {preserveAuthenticatedView,requireActiveSession} from './auth-session';
 import {AppContext} from './context';
+import {clearQueryCache,invalidateQueryScope,loadQuery,queryKey,queryScope} from './query-cache';
 import {Button,Card,ErrorHint,Input,Loader} from './components';
 import {Dashboard} from './pages/Dashboard';
 import {Contacts} from './pages/Contacts';
@@ -48,7 +49,7 @@ function AuthScreen(){
   </Card><small>BR Notify · Ambiente seguro</small>
  </div>;
 }
-function MenuItem({to,icon:Icon,label,onClose}:{to:string;icon:any;label:string;onClose:()=>void}){return <NavLink to={to} end={to==='/'} onClick={onClose} className={({isActive})=>'nav-item '+(isActive?'nav-active':'')}><Icon size={19} strokeWidth={1.8}/><span>{label}</span></NavLink>}
+function MenuItem({to,icon:Icon,label,onClose,onPrefetch}:{to:string;icon:any;label:string;onClose:()=>void;onPrefetch:(route:string)=>void}){return <NavLink to={to} end={to==='/'} onClick={onClose} onMouseEnter={()=>onPrefetch(to)} onFocus={()=>onPrefetch(to)} className={({isActive})=>'nav-item '+(isActive?'nav-active':'')}><Icon size={19} strokeWidth={1.8}/><span>{label}</span></NavLink>}
 function Workspace({sessionRef}:{sessionRef:RefObject<Session|null>}){
  const [actor,setActor]=useState<Actor|null>(null),[tenants,setTenants]=useState<any[]>([]),[tenantId,setTenantId]=useState(localStorage.getItem('brnotify.tenant')||''),[busy,setBusy]=useState(true),[fatal,setFatal]=useState(''),[menuOpen,setMenuOpen]=useState(false);
  const tenantIdRef=useRef(tenantId);
@@ -56,10 +57,30 @@ function Workspace({sessionRef}:{sessionRef:RefObject<Session|null>}){
  const location=useLocation(),navigate=useNavigate();
  // Use the newest token from the ref without changing the API function identity
  // when Supabase emits SIGNED_IN on focus or TOKEN_REFRESHED.
- const api=useCallback((path:string,options:RequestInit={},forceTenant?:string)=>
-  callAPI(requireActiveSession(sessionRef),path,forceTenant??tenantId,options),
-  [sessionRef,tenantId]
- );
+ const api=useCallback(async(path:string,options:RequestInit={},forceTenant?:string)=>{
+  const current=requireActiveSession(sessionRef);
+  const targetTenant=forceTenant??tenantId;
+  const response=await callAPI(current,path,targetTenant,options);
+  // Writes invalidate cached lists and summaries for exactly this user/tenant.
+  if((options.method||'GET').toUpperCase()!=='GET')
+   invalidateQueryScope(queryScope(current.user.id,targetTenant));
+  return response;
+ },[sessionRef,tenantId]);
+ const prefetch=useCallback((route:string)=>{
+  const paths:Record<string,string>={
+   '/':'/api/dashboard',
+   '/contacts':'/api/contacts?state=active&q=&page=1',
+   '/flows':'/api/automation-flows?page=1',
+   '/activities':'/api/notifications/history?revision=0&page=1',
+   '/reports':'/api/reports?days=30',
+   '/tenants':'/api/tenants?page=1',
+   '/members':'/api/members?page=1'
+  };
+  const path=paths[route],current=sessionRef.current;
+  if(!path||!current||!tenantId)return;
+  void loadQuery(queryKey(current.user.id,tenantId,path),
+   ()=>callAPI(current,path,tenantId)).catch(()=>{/* Hover prefetch is best effort. */});
+ },[sessionRef,tenantId]);
  const refresh=useCallback(async()=>{
   const current=requireActiveSession(sessionRef);
   const [me,list]=await Promise.all([
@@ -112,16 +133,16 @@ function Workspace({sessionRef}:{sessionRef:RefObject<Session|null>}){
      ?<label className="workspace-select"><Building2 size={18}/><select aria-label="Ambiente atual" value={tenantId} onChange={e=>changeTenant(e.target.value)}><option value="">Selecione um ambiente</option>{tenants.map(t=><option key={t.id||t.tenant_id} value={t.id||t.tenant_id}>{t.name}</option>)}</select><ChevronDown size={14}/></label>
      :<div className="workspace-select"><Building2 size={18}/><span style={{color:'#fff',fontWeight:700,fontSize:12}}>{tenantName}</span></div>}</div>
     <nav className="side-nav"><span className="sidebar-caption">PRINCIPAL</span>
-     <MenuItem to="/" icon={LayoutDashboard} label="Visão geral" onClose={close}/>
-     <MenuItem to="/notifications" icon={Send} label="Notificações" onClose={close}/>
-     <MenuItem to="/flows" icon={Clock3} label="Automações" onClose={close}/>
-     <MenuItem to="/contacts" icon={Users} label="Contatos" onClose={close}/>
-     <MenuItem to="/activities" icon={ChartNoAxesCombined} label="Atividades" onClose={close}/>
-     <MenuItem to="/reports" icon={ChartNoAxesCombined} label="Relatórios" onClose={close}/>
+     <MenuItem to="/" icon={LayoutDashboard} label="Visão geral" onClose={close} onPrefetch={prefetch}/>
+     <MenuItem to="/notifications" icon={Send} label="Notificações" onClose={close} onPrefetch={prefetch}/>
+     <MenuItem to="/flows" icon={Clock3} label="Automações" onClose={close} onPrefetch={prefetch}/>
+     <MenuItem to="/contacts" icon={Users} label="Contatos" onClose={close} onPrefetch={prefetch}/>
+     <MenuItem to="/activities" icon={ChartNoAxesCombined} label="Atividades" onClose={close} onPrefetch={prefetch}/>
+     <MenuItem to="/reports" icon={ChartNoAxesCombined} label="Relatórios" onClose={close} onPrefetch={prefetch}/>
      <span className="sidebar-caption nav-section">GERENCIAMENTO</span>
-     <MenuItem to="/settings" icon={Settings} label="GoTo Connect" onClose={close}/>
-     {role==='admin'&&<MenuItem to="/api-integrations" icon={PlugZap} label="API e Integrações" onClose={close}/> }
-     {isSuper&&<><MenuItem to="/tenants" icon={Building2} label="Ambientes" onClose={close}/><MenuItem to="/members" icon={Shield} label="Acessos" onClose={close}/></>}
+     <MenuItem to="/settings" icon={Settings} label="GoTo Connect" onClose={close} onPrefetch={prefetch}/>
+     {role==='admin'&&<MenuItem to="/api-integrations" icon={PlugZap} label="API e Integrações" onClose={close} onPrefetch={prefetch}/> }
+     {isSuper&&<><MenuItem to="/tenants" icon={Building2} label="Ambientes" onClose={close} onPrefetch={prefetch}/><MenuItem to="/members" icon={Shield} label="Acessos" onClose={close} onPrefetch={prefetch}/></>}
     </nav>
     <div className="sidebar-bottom"><div className="account-circle">{(actor?.email||'').slice(0,1).toUpperCase()}</div><div className="sidebar-account"><strong>{(actor?.email||'').split('@')[0]}</strong><span>{isSuper?'Super Admin':role==='viewer'?'Visualizador':'Administrador'}</span></div><button title="Sair" className="logout" onClick={()=>supabase.auth.signOut()}><LogOut size={19}/></button></div>
    </aside>
@@ -142,11 +163,12 @@ export function App(){
   // Workspace or refetch all tabs. Only a change of user identity does that.
   const {data:{subscription}}=supabase.auth.onAuthStateChange((event,next)=>{
    if(!alive)return;
+   if(sessionRef.current?.user.id&&sessionRef.current.user.id!==next?.user.id)clearQueryCache();
    sessionRef.current=next;
    setSession(current=>preserveAuthenticatedView(current,next));
    setLoading(false);
    if(event==='PASSWORD_RECOVERY')setRecovery(true);
-   if(event==='SIGNED_OUT')setRecovery(false);
+   if(event==='SIGNED_OUT'){setRecovery(false);clearQueryCache()}
   });
   return()=>{alive=false;subscription.unsubscribe()};
  },[]);
