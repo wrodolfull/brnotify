@@ -198,9 +198,9 @@ router.delete('/api/members/:id',tenant(true),requireSuper,wrap(async(req,res)=>
 
 router.get('/api/dashboard',tenant(),wrap(async(req,res)=>{
  const t=req.tenantId!;
- const counts=await query(
-  "select count(*) filter(where status='scheduled')::int as scheduled,count(*) filter(where status='processing')::int as processing,count(*) filter(where status='sent')::int as sent,count(*) filter(where status='delivered')::int as delivered,count(*) filter(where status='failed')::int as failed,count(*) filter(where status='unknown')::int as unknown from (select status from scheduled_messages where tenant_id=$1 union all select case when status='queued' then 'scheduled' else status end from on_demand_messages where tenant_id=$1) messages",[t]);
- const [contacts,events,recent,trend,upcoming]=await Promise.all([
+ const [counts,contacts,events,recent,trend,upcoming]=await Promise.all([
+  query(
+   "select count(*) filter(where status='scheduled')::int as scheduled,count(*) filter(where status='processing')::int as processing,count(*) filter(where status='sent')::int as sent,count(*) filter(where status='delivered')::int as delivered,count(*) filter(where status='failed')::int as failed,count(*) filter(where status='unknown')::int as unknown from (select status from scheduled_messages where tenant_id=$1 union all select case when status='queued' then 'scheduled' else status end from on_demand_messages where tenant_id=$1) messages",[t]),
   query('select count(*)::int n from contacts where tenant_id=$1',[t]),
   query("select count(*)::int n from events where tenant_id=$1 and status='scheduled' and starts_at>now()",[t]),
   query(
