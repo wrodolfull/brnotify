@@ -4,7 +4,7 @@ process.env.DATABASE_URL='postgresql://test:test@127.0.0.1:5432/test';
 process.env.SUPABASE_URL='https://example.supabase.co';
 process.env.SUPABASE_SERVICE_ROLE_KEY='placeholder';
 process.env.TOKEN_ENCRYPTION_KEY='0'.repeat(64);
-const {messageWebhookUrl,findMatchingSubscription}=await import('./goto-message-notifications.js');
+const {messageWebhookUrl,findMatchingSubscription,existingConflict}=await import('./goto-message-notifications.js');
 test('webhook address uses the public HTTPS origin and a private secret',()=>{
  assert.equal(messageWebhookUrl('https://api.bridgesolucoes.com.br/','x'.repeat(32)),
   'https://api.bridgesolucoes.com.br/api/webhooks/goto/'+'x'.repeat(32));
@@ -19,4 +19,10 @@ test('reuse only subscriptions matching the channel, account and required event 
  assert.equal(findMatchingSubscription({items:[{...v,eventTypes:['DELIVERY_STATUS']}]},v.channelId,'123456789012'),null);
  assert.equal(findMatchingSubscription({items:[v]},'Webhook.other','123456789012'),null);
  assert.throws(()=>findMatchingSubscription({},v.channelId,'123456789012'),/lista de assinaturas/);
+});
+test('409 conflict detection never replaces a pre-existing subscription on another channel',()=>{
+ const first={id:'sub-old',channelId:'Webhook.first',eventTypes:['INBOUND_MESSAGE','DELIVERY_STATUS'],ownerEntity:'123',ownerEntityType:'ORGANIZATION'};
+ assert.match(existingConflict([first],'Webhook.second')||'',/outro canal/);
+ assert.equal(existingConflict([first],'Webhook.first'),null);
+ assert.match(existingConflict([{...first,eventTypes:['DELIVERY_STATUS']}],'Webhook.first')||'',/incompleta/);
 });
