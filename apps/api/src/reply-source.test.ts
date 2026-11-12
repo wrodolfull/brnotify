@@ -1,6 +1,10 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {resolveRecentReplySource} from './reply-source.js';
+process.env.DATABASE_URL='postgresql://test:test@127.0.0.1:5432/test';
+process.env.SUPABASE_URL='https://example.supabase.co';
+process.env.SUPABASE_SERVICE_ROLE_KEY='placeholder';
+process.env.TOKEN_ENCRYPTION_KEY='0'.repeat(64);
+const {resolveRecentReplySource}=await import('./reply-source.js');
 
 const id='11111111-1111-4111-8111-111111111111';
 const at='2026-11-12T14:00:00.000Z';
