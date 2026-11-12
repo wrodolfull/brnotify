@@ -46,7 +46,7 @@ export function Notifications({initialMode='choose'}:{initialMode?:Mode}){
  const {api,role,notify}=useApp();
  const canEdit=role==='admin';
  const [mode,setMode]=useState<Mode>(initialMode);
- const templateQuery=useCachedData<{items:Template[]}>('/api/notifications/templates');
+ const templateQuery=useCachedData<{items:Template[]}>('/api/notifications/templates',mode!=='history');
  const templates=templateQuery.data?.items||[];
  const [templateId,setTemplateId]=useState('');
  const [contactSearch,setContactSearch]=useState('');
@@ -161,7 +161,9 @@ export function Notifications({initialMode='choose'}:{initialMode?:Mode}){
      </select></label>
      {textFields.map(f=><label className="field" key={f.key}><span>{f.label}</span><input required maxLength={1024} placeholder={f.example||'Digite o valor desta variável'} value={variables[f.key]||''} onChange={e=>setVariables(v=>({...v,[f.key]:e.target.value}))}/></label>)}
      {mediaField&&!mediaReady&&<p className="notify-alert">Este modelo precisa de uma mídia configurada em GoTo Connect antes do envio.</p>}
-     {!templates.length&&<p className="notify-alert">Nenhum modelo aprovado disponível. Conecte a GoTo e sincronize os modelos em GoTo Connect.</p>}
+     {templateQuery.loading&&<p className="muted">Carregando modelos de WhatsApp...</p>}
+     <ErrorHint error={templateQuery.error}/>
+     {!templateQuery.loading&&!templates.length&&<p className="notify-alert">Nenhum modelo aprovado disponível. Conecte a GoTo e sincronize os modelos em GoTo Connect.</p>}
     </div>
     <div className="notify-section"><h2>3. Quando enviar?</h2>
      <div className="notify-radio-row">
