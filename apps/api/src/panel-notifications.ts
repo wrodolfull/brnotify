@@ -8,6 +8,7 @@ import {withTransaction,ApiOperationError} from './external-operations.js';
 import {normalizeOnDemandInput,onDemandFingerprint,prepareOnDemandTemplate,DEDUPE_WINDOW_SECONDS,MAX_SENDS_PER_HOUR_PER_NUMBER} from './on-demand-model.js';
 import {validateMediaTypeForTemplate,type AllowedMime} from './goto-media.js';
 import {parseImportedDate,toUTC,phoneE164} from './time.js';
+import {normalizeBatchHeader,hasBatchExamplePlaceholders} from './import-template-help.js';
 
 const uuid=z.string().uuid();
 const variables=z.record(z.string().max(200),z.string().trim().min(1).max(1024)).default({});
@@ -110,7 +111,7 @@ async function parseSheet(file:Express.Multer.File){
  const sheet=book.worksheets[0];
  if(!sheet)throw new ApiOperationError(422,'A planilha não possui dados.');
  const cols=new Map<string,number>();
- sheet.getRow(1).eachCell((c,i)=>cols.set(cell(c.value),i));
+ sheet.getRow(1).eachCell((c,i)=>cols.set(normalizeBatchHeader(cell(c.value)),i));
  if(!cols.has('whatsapp'))throw new ApiOperationError(422,'A planilha precisa ter uma coluna whatsapp.');
  if(sheet.rowCount>252)throw new ApiOperationError(422,'Limite de 250 linhas por envio. Divida a planilha.');
  return Array.from({length:Math.max(0,sheet.rowCount-1)},(_,i)=>{
@@ -132,6 +133,8 @@ export async function panelBatch(req:Request,res:Response,preview:boolean){
  const items:Array<{line:number;data:PanelInput;phone:string;scheduled_at:string|null}>=[];
  for(const row of rows){
   try{
+   if(hasBatchExamplePlaceholders(row.phone,row.vars))
+    throw new Error('Esta é a linha de exemplo. Substitua o WhatsApp fictício e todas as variáveis SUBSTITUIR_EXEMPLO antes de enviar.');
    const phone=phoneE164(row.phone);
    const contact=await query('select id from contacts where tenant_id=$1 and phone=$2',[req.tenantId,phone]);
    if(!contact.rowCount)throw new Error('Contato não cadastrado. Cadastre e registre o consentimento antes do envio.');

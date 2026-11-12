@@ -146,6 +146,8 @@ export function Contacts(){
  {importModal&&<Modal title="Importar contatos" onClose={()=>{if(!busy)setImportModal(false)}}>
   <div className="form-stack">
    <p className="muted">Importe até 10.000 contatos por arquivo XLSX ou CSV (12 MB). A importação não cria compromissos nem envia WhatsApp.</p>
+   <p className="muted"><strong>Obrigatórios:</strong> nome e whatsapp (DDI + DDD). <strong>Opcionais:</strong> email e consentimento (vazio equivale a NÃO). A origem_consentimento é <strong>obrigatória apenas se consentimento for SIM</strong>.</p>
+   <p className="muted">O modelo Excel contém uma linha de exemplo destacada e a aba Instruções. <strong>Substitua ou exclua essa linha antes de importar.</strong> As colunas obrigatórias estão marcadas em vermelho.</p>
    <Button secondary onClick={()=>void downloadContactsFile()}><Download size={16}/> Baixar modelo Excel de contatos</Button>
    <label className="field"><span>Planilha de contatos</span>
     <input type="file" accept=".xlsx,.csv" onChange={e=>{
