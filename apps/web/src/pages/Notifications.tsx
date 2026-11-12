@@ -97,10 +97,19 @@ export function Notifications({initialMode='choose'}:{initialMode?:Mode}){
  }
  function downloadModel(){
   if(!template)return;
+  // Keep the technical column keys intact; only append readable annotations.
+  // The API accepts both annotated and legacy headers.
   const keys=['whatsapp','data_envio','hora_envio',...textFields.map(x=>x.key)];
-  const escaped=keys.map(x=>'"'+x.replace(/"/g,'""')+'"').join(';');
-  const example=['+5511999999999','','',...textFields.map(x=>/^[=+@-]/.test(x.example)?'VALOR':x.example||'VALOR')].map(x=>'"'+x.replace(/"/g,'""')+'"').join(';');
-  const blob=new Blob(['\uFEFF'+escaped+'\r\n'+example+'\r\n'],{type:'text/csv;charset=utf-8'});
+  const annotated=keys.map((key,i)=>key+(i===1||i===2?' (opcional)':' (obrigatório)'));
+  const quote=(value:string)=>'"'+value.replace(/"/g,'""')+'"';
+  const header=annotated.map(quote).join(';');
+  const exampleDate=new Date();
+  exampleDate.setDate(exampleDate.getDate()+2);
+  const sample=['+5511999999999',exampleDate.toLocaleDateString('pt-BR'),'10:00',
+   ...textFields.map(()=>'SUBSTITUIR_EXEMPLO')];
+  const example=sample.map(quote).join(';');
+  // The preview API rejects this untouched sample row so no demo dispatch occurs.
+  const blob=new Blob(['\uFEFF'+header+'\r\n'+example+'\r\n'],{type:'text/csv;charset=utf-8'});
   const url=URL.createObjectURL(blob);
   const a=document.createElement('a');a.href=url;a.download='brnotify-envios.csv';a.click();URL.revokeObjectURL(url);
  }
@@ -189,7 +198,8 @@ export function Notifications({initialMode='choose'}:{initialMode?:Mode}){
    </div>
    <div className="notify-section">
     <h2>2. Prepare a planilha</h2>
-    <p>Use contatos já cadastrados e autorizados. Deixe data_envio e hora_envio vazios para enviar assim que possível ou preencha as duas colunas para agendar cada linha.</p>
+    <p><strong>Obrigatórios:</strong> whatsapp e todas as variáveis do modelo selecionado. <strong>Opcionais:</strong> data_envio e hora_envio (preencha ambas para agendar, ou deixe ambas vazias para enviar assim que possível).</p>
+    <p>O arquivo já vem com a primeira linha de dados preenchida como <strong>exemplo</strong>. Substitua o telefone fictício, a data, o horário e os valores SUBSTITUIR_EXEMPLO pelos dados reais, ou exclua a linha inteira. Os contatos precisam estar cadastrados e autorizados.</p>
     <div className="notify-actions"><Button secondary onClick={downloadModel} disabled={!templateId}>Baixar modelo da planilha</Button></div>
     <label className="field"><span>Arquivo CSV ou XLSX (até 250 linhas)</span><input type="file" accept=".csv,.xlsx" onChange={e=>resetSheet(e.target.files?.[0]||null)}/></label>
    </div>
