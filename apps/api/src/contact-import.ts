@@ -54,8 +54,8 @@ async function spreadsheet(file:Express.Multer.File):Promise<Parsed>{
   try{
    const get=(key:string)=>{const idx=col.get(key);return idx?cell(row.getCell(idx).value):''};
    const name=get('nome');
-   if(name==='EXEMPLO - Maria Santos')
-    throw new Error('Esta é a linha de exemplo do modelo. Substitua os dados ou exclua a linha antes de importar.');
+   if(name==='EXEMPLO - Maria Santos'||get('whatsapp').replace(/\D/g,'')==='5511999999999')
+    throw new Error('Esta é a linha de exemplo do modelo. Substitua o nome e o WhatsApp fictício ou exclua a linha antes de importar.');
    const phone=phoneE164(get('whatsapp')),email=get('email');
    if(name.length<2||name.length>180)throw new Error('Nome deve ter entre 2 e 180 caracteres.');
    if(email&&!z.string().email().safeParse(email).success)throw new Error('E-mail inválido.');
