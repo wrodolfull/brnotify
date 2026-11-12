@@ -18,6 +18,7 @@ import {disconnectGotoTenant} from './goto-disconnect.js';
 import {normalizeGotoEvent} from './goto-event-normalizer.js';
 import {recordGotoEvent,listGoToEvents,listGoToCalls} from './goto-event-store.js';
 import {activateCallMonitoring,callMonitorStatus,enableCallIntelligence} from './goto-call-integration.js';
+import {activateMessageNotifications,messageNotificationStatus} from './goto-message-notifications.js';
 import {env} from './config.js';
 import {listVisibleTenants,listTenantOptions} from './tenant-list.js';
 import {loadDashboardTrend} from './dashboard-trend.js';
@@ -62,10 +63,18 @@ const eventPreviewInput=eventFields.pick({
 const deny=(req:any,res:any)=>{if(!req.actor?.superAdmin)return res.status(403).json({error:'Somente Super Admin'});};
 
 router.get('/health',(_req,res)=>res.json({ok:true,app:'brnotify-api'}));
+// GoTo probes HTTPS webhooks with OPTIONS before provisioning a channel.
+router.options('/api/webhooks/goto/:secret',(_req,res)=>{
+ res.setHeader('Allow','POST, OPTIONS');
+ res.setHeader('Access-Control-Allow-Methods','POST, OPTIONS');
+ return res.status(204).end();
+});
 router.post('/api/webhooks/goto/:secret',wrap(async(req,res)=>{
  if(!env.GOTO_WEBHOOK_SECRET||env.GOTO_WEBHOOK_SECRET.length<24)return res.status(503).json({error:'Webhook desabilitado'});
  const a=Buffer.from(req.params.secret||'');const b=Buffer.from(env.GOTO_WEBHOOK_SECRET);
  if(a.length!==b.length||!crypto.timingSafeEqual(a,b))return res.status(404).end();
+ // GoTo sends an empty POST during notification channel registration.
+ if(!req.body||typeof req.body!=='object'||!Object.keys(req.body).length)return res.status(204).end();
  await handleGotoWebhook(req.body);
  const normalized=normalizeGotoEvent(req.body);
  if(normalized&&normalized.source==='inbox-notification'){
@@ -108,7 +117,7 @@ router.get('/api/goto/callback',wrap(async(req,res)=>{
   const tokens=await exchangeCode(code);
   if(!tokens.refresh_token)throw new Error('Token de atualização ausente');
   await query(
-   "insert into goto_connections(tenant_id,access_token_enc,refresh_token_enc,expires_at,principal,call_scopes_granted) values($1,$2,$3,$4,$5,$6) on conflict(tenant_id) do update set access_token_enc=excluded.access_token_enc,refresh_token_enc=excluded.refresh_token_enc,expires_at=excluded.expires_at,principal=excluded.principal,call_scopes_granted=excluded.call_scopes_granted,updated_at=now()",
+   "insert into goto_connections(tenant_id,access_token_enc,refresh_token_enc,expires_at,principal,call_scopes_granted) values($1,$2,$3,$4,$5,$6) on conflict(tenant_id) do update set access_token_enc=excluded.access_token_enc,refresh_token_enc=excluded.refresh_token_enc,expires_at=excluded.expires_at,principal=excluded.principal,call_scopes_granted=excluded.call_scopes_granted,notification_channel_id=null,notification_subscription_id=null,notification_last_error=null,notification_verified_at=null,updated_at=now()",
    [match.rows[0].tenant_id,encrypt(tokens.access_token),encrypt(tokens.refresh_token),new Date(Date.now()+tokens.expires_in*1000),tokens.principal||null,match.rows[0].request_call_scopes]
   );
   await audit(match.rows[0].tenant_id,match.rows[0].user_id,'goto.connected');
@@ -442,6 +451,7 @@ router.patch('/api/goto',tenant(true),activeTenant,wrap(async(req,res)=>{
  const saved=await query('update goto_connections set account_key=$2,from_touchpoint=$3,updated_at=now() where tenant_id=$1 returning account_key,from_touchpoint',[req.tenantId,input.account_key,input.from_touchpoint]);
  if(!saved.rowCount)return res.status(409).json({error:'Conecte a conta GoTo antes de salvar'});
  if(previous.rows[0]?.account_key&&previous.rows[0].account_key!==input.account_key){
+  await query('update goto_connections set notification_channel_id=null,notification_subscription_id=null,notification_last_error=null,notification_verified_at=null,updated_at=now() where tenant_id=$1',[req.tenantId]);
   await query("update goto_call_monitors set enabled=false,last_error='Conta GoTo alterada. Reconfigure o monitoramento de telefonia.',updated_at=now() where tenant_id=$1",[req.tenantId]);
  }
  res.json(saved.rows[0]);
@@ -470,6 +480,14 @@ router.get('/api/goto/events',tenant(),wrap(async(req,res)=>{
  const kind=z.enum(['all','call','message','intelligence']).default('all').parse(req.query.kind);
  res.json(await listGoToEvents(req.tenantId!,req.query.page,kind));
 }));
+router.get('/api/goto/notifications/status',tenant(),wrap(async(req,res)=>{
+ res.json(await messageNotificationStatus(req.tenantId!));
+}));
+router.post('/api/goto/notifications/activate',tenant(true),activeTenant,wrap(async(req,res)=>{
+ const result=await activateMessageNotifications(req.tenantId!);
+ await audit(req.tenantId!,req.actor!.id,'goto.notifications_activated',{already_active:result.already_active});
+ res.status(result.already_active?200:201).json(result);
+}));
 router.post('/api/goto/notifications/subscribe',tenant(true),activeTenant,wrap(async(req,res)=>{
  const channelId=z.string().regex(/^Webhook\.[A-Za-z0-9-]{20,100}$/).parse(req.body.channel_id);
  const connection=await query('select account_key,from_touchpoint from goto_connections where tenant_id=$1',[req.tenantId]);
@@ -479,7 +497,8 @@ router.post('/api/goto/notifications/subscribe',tenant(true),activeTenant,wrap(a
  const result=await gotoRequest(req.tenantId!,'/messaging/v2/subscriptions',{
   method:'POST',json:{accountKey,ownerEntity:accountKey,ownerEntityType:'ORGANIZATION',channelId,eventTypes:['INBOUND_MESSAGE','DELIVERY_STATUS']}
  }) as {id?:string};
- await query('update goto_connections set notification_channel_id=$2,notification_subscription_id=$3,updated_at=now() where tenant_id=$1',[req.tenantId,channelId,result.id||null]);
+ if(!result.id)throw new Error('A GoTo não confirmou o ID da assinatura de mensagens.');
+ await query('update goto_connections set notification_channel_id=$2,notification_subscription_id=$3,notification_last_error=null,notification_verified_at=now(),updated_at=now() where tenant_id=$1',[req.tenantId,channelId,result.id]);
  await audit(req.tenantId!,req.actor!.id,'goto.notifications_subscribed',{channelId});
  res.status(201).json({id:result.id||null,channelId});
 }));
