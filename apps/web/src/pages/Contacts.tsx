@@ -1,7 +1,7 @@
 import {useEffect,useState,type FormEvent} from 'react';
 import {CarFront,ChevronRight,Mail,Phone,Plus,UserRound,CalendarDays,Download,UploadCloud,Trash2} from 'lucide-react';
 import {useApp} from '../context';
-import {Button,Card,Empty,ErrorHint,Input,Modal,NewButton,PageTitle,Pagination,SearchBox,SubmitRow,formValues,useList} from '../components';
+import {Button,Card,Empty,ErrorHint,Input,Loader,Modal,NewButton,PageTitle,Pagination,SearchBox,SubmitRow,formValues,useList} from '../components';
 import {fmtDate} from '../api';
 
 const modelFields:Record<string,[string,string][]> = {
@@ -140,7 +140,7 @@ export function Contacts(){
       {c.consent&&!c.opted_out_at?'WhatsApp autorizado':'Sem autorização'}
      </span><ChevronRight size={18}/>
     </button>
-   </div>)}</div>:!list.loading&&<Empty title="Nenhum contato encontrado" subtitle={tab==='active'?'Cadastre individualmente ou importe uma planilha.':'Os contatos desativados aparecerão nesta aba.'}/>}
+   </div>)}</div>:list.loading?<Loader/>:<Empty title="Nenhum contato encontrado" subtitle={tab==='active'?'Cadastre individualmente ou importe uma planilha.':'Os contatos desativados aparecerão nesta aba.'}/>}
   <Pagination page={list.page} pages={list.data.pages} onChange={v=>{setCheckedIds([]);list.setPage(v)}}/>
  </Card>
  {importModal&&<Modal title="Importar contatos" onClose={()=>{if(!busy)setImportModal(false)}}>
