@@ -35,6 +35,8 @@ jobs:
         run: npm run test -w @brnotify/api
       - name: Workspace session lifecycle tests
         run: npx tsx --test apps/web/auth-session.test.mjs
+      - name: Navigation query cache and tenant isolation tests
+        run: npx tsx --test apps/web/query-cache.test.mjs
       - name: Automation and GoTo settings UI regression
         run: node --test apps/web/flows-settings.test.mjs
       - name: Contact lifecycle and bulk management UI regression
