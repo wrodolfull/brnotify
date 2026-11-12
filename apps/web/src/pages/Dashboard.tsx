@@ -1,11 +1,11 @@
-import {useEffect,useState} from 'react';
+import {useState} from 'react';
 import {
  AlertTriangle,ArrowRight,ArrowUpRight,CalendarClock,CalendarDays,CheckCheck,
  ChevronRight,Clock3,RefreshCw,Send,Users,Workflow
 } from 'lucide-react';
 import {Link} from 'react-router-dom';
 import {useApp} from '../context';
-import {Card,Empty,Loader,Status} from '../components';
+import {Card,Empty,Loader,Status,useCachedData} from '../components';
 import {fmtDate,fmtNum} from '../api';
 
 type HistoryPoint={day:string;sent:number;delivered:number;failed:number};
@@ -29,23 +29,11 @@ const metrics=[
 
 export function Dashboard(){
  const {api,tenantName,role}=useApp();
- const [data,setData]=useState<DashboardData|null>(null);
- const [loading,setLoading]=useState(true);
- const [error,setError]=useState('');
+ const {data:cachedData,loading,refreshing,error,refresh}=useCachedData<DashboardData>('/api/dashboard');
+ const data=cachedData??null;
  const [period,setPeriod]=useState<7|14>(14);
- const [refresh,setRefresh]=useState(0);
- useEffect(()=>{
-  let mounted=true;
-  setLoading(true);
-  api('/api/dashboard').then((result:DashboardData)=>{
-   if(mounted){setData(result);setError('')}
-  }).catch((e:Error)=>{
-   if(mounted)setError(e.message)
-  }).finally(()=>{if(mounted)setLoading(false)});
-  return()=>{mounted=false};
- },[api,refresh]);
  if(!data&&loading)return <Loader/>;
- if(!data&&error)return <div className="nd-state-error"><AlertTriangle size={25}/><h2>Não foi possível carregar o painel</h2><p>{error}</p><button className="nd-primary-button" onClick={()=>setRefresh(x=>x+1)}>Tentar novamente</button></div>;
+ if(!data&&error)return <div className="nd-state-error"><AlertTriangle size={25}/><h2>Não foi possível carregar o painel</h2><p>{error}</p><button className="nd-primary-button" onClick={refresh}>Tentar novamente</button></div>;
 
  const m=data?.messages??{scheduled:0,processing:0,sent:0,delivered:0,failed:0,unknown:0};
  const trend=(data?.trend??[]).slice(-period);
@@ -69,7 +57,7 @@ export function Dashboard(){
     <p>Acompanhe os lembretes de <strong>{tenantName}</strong> e acesse suas notificações.</p>
    </div>
    <div className="nd-heading-actions">
-    <button type="button" className="nd-refresh-button" onClick={()=>setRefresh(x=>x+1)} disabled={loading} aria-label="Atualizar painel" title="Atualizar painel"><RefreshCw size={17} className={loading?'spin':''}/></button>
+    <button type="button" className="nd-refresh-button" onClick={refresh} disabled={loading||refreshing} aria-label="Atualizar painel" title="Atualizar painel"><RefreshCw size={17} className={loading||refreshing?'spin':''}/></button>
     {role==='admin'&&<Link className="nd-primary-button" to="/notifications"><CalendarClock size={17}/> Nova notificação <ArrowUpRight size={16}/></Link>}
    </div>
   </header>
