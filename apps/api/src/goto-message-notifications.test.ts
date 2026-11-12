@@ -20,10 +20,6 @@ test('reuse only subscriptions matching the channel, account and required event 
  assert.equal(findMatchingSubscription({items:[v]},'Webhook.other','123456789012'),null);
  assert.throws(()=>findMatchingSubscription({},v.channelId,'123456789012'),/lista de assinaturas/);
 });
-\ntest('create subscription body must include required messaging events',()=>{
- assert.deepEqual(['INBOUND_MESSAGE','DELIVERY_STATUS'],['INBOUND_MESSAGE','DELIVERY_STATUS']);
-});
-
 test('409 conflict detection never replaces a pre-existing subscription on another channel',()=>{
  const first={id:'sub-old',channelId:'Webhook.first',eventTypes:['INBOUND_MESSAGE','DELIVERY_STATUS'],ownerEntity:'123',ownerEntityType:'ORGANIZATION'};
  assert.match(existingConflict([first],'Webhook.second')||'',/outro canal/);
