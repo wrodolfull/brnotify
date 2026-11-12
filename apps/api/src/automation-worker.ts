@@ -2,7 +2,7 @@ import {pool,query} from './db.js';
 import {matchesFlow,interpolateVariables,type EventForFlow} from './automation-model.js';
 import {enqueuePanelNotification} from './panel-notifications.js';
 import {phoneE164} from './time.js';
-import {resolveRecentReplySource,diagnoseUnmatchedReply} from './reply-source.js';
+import {resolveFlowTemplateSource,diagnoseUnmatchedReply} from './reply-source.js';
 
 const ZERO='00000000-0000-0000-0000-000000000000';
 /** Dispatch scanning is transactional: cursor and queued runs commit together. */
@@ -33,11 +33,11 @@ export async function scanAutomationEvents(){
    let overLimit=false;
    for(const event of events.rows){
     if(!matchesFlow(flow,event as EventForFlow))continue;
-    let source:null|{templateId:string;messageId:string;kind:'panel'|'reminder'}=null;
+    let source:null|{templateId:string;messageId:string|null;sendCount:number}=null;
     if(event.event_type==='message.received'&&flow.source_template_id){
      const phone=event.metadata?.phone;
-     source=await resolveRecentReplySource(client,flow.tenant_id,phone,event.occurred_at);
-     // Never infer a template when multiple sends might have prompted the reply.
+     source=await resolveFlowTemplateSource(client,flow.tenant_id,phone,event.occurred_at);
+     // Distinct templates are ambiguous; repeated sends of one template share the same reply options.
      if(!source||source.templateId!==flow.source_template_id){
       const reason=!source
        ? await diagnoseUnmatchedReply(client,flow.tenant_id,phone,event.occurred_at)
@@ -69,7 +69,7 @@ export async function scanAutomationEvents(){
     const inserted=await client.query(
      `insert into automation_runs(tenant_id,flow_id,event_id,revision,due_at,context)
       values($1,$2,$3,$4,$5,$6) on conflict(flow_id,event_id) do nothing returning id`,
-     [flow.tenant_id,flow.id,event.id,flow.revision,due,JSON.stringify(source?{source_template_id:source.templateId,source_message_id:source.messageId}: {})]
+     [flow.tenant_id,flow.id,event.id,flow.revision,due,JSON.stringify(source?{source_template_id:source.templateId,source_message_id:source.messageId,source_send_count:source.sendCount}: {})]
     );
     if(inserted.rowCount){created++;quota++}
    }
