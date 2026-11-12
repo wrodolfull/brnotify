@@ -36,3 +36,18 @@ test('GoTo disconnect is restricted to authorized tenant admin, confirms impact,
  assert.match(service,/update automation_flows set status='paused'/);
  assert.match(service,/provider_authorization_revoked:false/);
 });
+
+test('one-click GoTo inbound setup is tenant protected and supports webhook verification',()=>{
+ const ui=read('apps/web/src/pages/Settings.tsx');
+ const routes=read('apps/api/src/routes.ts');
+ const service=read('apps/api/src/goto-message-notifications.ts');
+ assert.match(ui,/Ativar recebimento de respostas/);
+ assert.match(ui,/\/api\/goto\/notifications\/activate/);
+ assert.match(ui,/Configuração manual \(avançado\)/);
+ assert.match(routes,/router\.post\('\/api\/goto\/notifications\/activate',tenant\(true\),activeTenant/);
+ assert.match(routes,/router\.options\('\/api\/webhooks\/goto\/:secret'/);
+ assert.match(routes,/Object\.keys\(req\.body\)\.length/);
+ assert.match(service,/INBOUND_MESSAGE/);
+ assert.match(service,/DELIVERY_STATUS/);
+ assert.match(service,/pg_try_advisory_lock/);
+});

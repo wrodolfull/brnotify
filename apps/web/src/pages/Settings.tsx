@@ -1,6 +1,7 @@
 import {useEffect,useState,type FormEvent} from 'react';
 import {Link,useSearchParams} from 'react-router-dom';
 import {useApp} from '../context';
+import {fmtDate} from '../api';
 import {Button,Card,Empty,ErrorHint,Input,Loader,PageTitle,Pagination,Status,useList} from '../components';
 
 const fixedFields:[string,string][]=[
@@ -83,6 +84,7 @@ export function SettingsPage(){
  const testHistory=useList('/api/goto/templates/tests',role==='admin');
  const [conn,setConn]=useState<any>(null);
  const [callMonitor,setCallMonitor]=useState<any>(null);
+ const [notificationStatus,setNotificationStatus]=useState<any>(null);
  const [busy,setBusy]=useState(false);
  const [error,setError]=useState('');
  const [selected,setSelected]=useState<any>(null);
@@ -96,7 +98,8 @@ export function SettingsPage(){
  const fields=selected?templateFields(selected.definition):[];
  const load=()=>api('/api/goto').then(setConn).catch((e:any)=>setError(e.message));
  const loadCalls=()=>api('/api/goto/calls/status').then(setCallMonitor).catch((e:any)=>setError(e.message));
- useEffect(()=>{void load();void loadCalls()},[api]);
+ const loadNotifications=()=>api('/api/goto/notifications/status').then(setNotificationStatus).catch((e:any)=>setError(e.message));
+ useEffect(()=>{void load();void loadCalls();void loadNotifications()},[api]);
  useEffect(()=>{if(params.get('goto')==='connected')notify('GoTo conectada. Configure a conta e o remetente.')},[params]);
  async function connect(withCalls=false){
   try{
@@ -131,7 +134,7 @@ export function SettingsPage(){
   setBusy(true);setError('');
   try{
    const result=await api('/api/goto',{method:'DELETE'});
-   await Promise.all([load(),loadCalls()]);
+   await Promise.all([load(),loadCalls(),loadNotifications()]);
    setSelected(null);setTestResult('');templates.refresh();testHistory.refresh();
    notify('Conexão GoTo removida do BR Notify. '+result.cancelled_reminders+' lembretes e '+result.cancelled_direct+' envios na fila cancelados.');
   }catch(e:any){setError(e.message)}finally{setBusy(false)}
@@ -143,15 +146,24 @@ export function SettingsPage(){
    await api('/api/goto',{method:'PATCH',body:JSON.stringify({
     account_key:values.get('account_key'),from_touchpoint:values.get('from_touchpoint')
    })});
-   notify('Configuração GoTo atualizada');await load();
+   notify('Configuração GoTo atualizada');await Promise.all([load(),loadNotifications()]);
   }catch(e:any){setError(e.message)}finally{setBusy(false)}
+ }
+ async function activateNotifications(){
+  setBusy(true);setError('');
+  try{
+   const result=await api('/api/goto/notifications/activate',{method:'POST'});
+   notify(result.already_active?'Assinatura GoTo confirmada.':'Recebimento de mensagens configurado na GoTo.');
+   await Promise.all([load(),loadNotifications()]);
+  }catch(e:any){setError(e.message);await loadNotifications()}
+  finally{setBusy(false)}
  }
  async function subscribe(e:FormEvent<HTMLFormElement>){
   e.preventDefault();setBusy(true);setError('');
   const id=String(new FormData(e.currentTarget).get('channel_id')||'');
   try{
    await api('/api/goto/notifications/subscribe',{method:'POST',body:JSON.stringify({channel_id:id})});
-   notify('Assinatura de eventos ativada');await load();
+   notify('Assinatura de eventos ativada');await Promise.all([load(),loadNotifications()]);
   }catch(e:any){setError(e.message)}finally{setBusy(false)}
  }
  async function sync(){
@@ -230,12 +242,34 @@ export function SettingsPage(){
       <Input name="from_touchpoint" label="ID do número WhatsApp na Meta" required defaultValue={conn.from_touchpoint||''} key={'f'+conn.from_touchpoint}/>
       {canEdit&&<Button type="submit" disabled={busy}>Salvar integração</Button>}
      </form>}
-     {conn.connected&&canEdit&&<form className="form-stack integration-form" onSubmit={subscribe}>
-      <Input name="channel_id" label="Notification Channel ID" placeholder="Webhook.xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" required defaultValue={conn.notification_channel_id||''}/>
-      <p className="hint">O canal webhook deve apontar para o backend HTTPS do BR Notify e a conta deve ter autorização para criar a assinatura.</p>
-      <Button type="submit" disabled={busy}>Ativar notificações</Button>
-      {conn.notification_subscription_id&&<p className="success-line">Assinatura: {conn.notification_subscription_id}</p>}
-     </form>}
+     {conn.connected&&<div className="integration-form goto-replies-panel">
+      <h3>Recebimento de respostas no WhatsApp</h3>
+      <p className="hint">Ative com um clique. O BR Notify cria o canal Webhook e assina os eventos de respostas e status de entrega na GoTo, sem precisar usar Postman.</p>
+      {notificationStatus===null?<p className="muted">Verificando configuração...</p>:<>
+       <p className={notificationStatus.subscription_configured&&!notificationStatus.last_error?'success-line':'muted'}>
+        {notificationStatus.last_error?'Atenção: a última ativação apresentou falha.':
+         notificationStatus.subscription_configured?'Assinatura cadastrada na GoTo. Faça um teste real de resposta.':
+         notificationStatus.channel_configured?'Canal criado, mas a assinatura ainda não foi concluída.':
+         'Recebimento ainda não configurado.'}
+       </p>
+       {notificationStatus.last_error&&<p className="notify-alert">{notificationStatus.last_error}</p>}
+       {!notificationStatus.webhook_ready&&<p className="notify-alert">Configure API_URL com o domínio HTTPS público e GOTO_WEBHOOK_SECRET na API antes de ativar.</p>}
+       {notificationStatus.last_received_at&&<p className="hint">Última resposta recebida: {fmtDate(notificationStatus.last_received_at)}.</p>}
+       {canEdit&&<Button type="button" disabled={busy||!notificationStatus.webhook_ready||!notificationStatus.account_configured||!notificationStatus.sender_configured} onClick={()=>void activateNotifications()}>
+        {busy?'Configurando...':notificationStatus.subscription_configured?'Verificar ou reativar recebimento':'Ativar recebimento de respostas'}
+       </Button>}
+       {canEdit&&(!notificationStatus.account_configured||!notificationStatus.sender_configured)&&<p className="hint">Salve o Account Key e o ID do número WhatsApp acima antes de ativar.</p>}
+       <p className="hint">A conta autorizada deve ser Super Admin na GoTo. O cadastro da assinatura só será validado ponta a ponta com uma resposta real.</p>
+      </>}
+      {canEdit&&<details className="integration-form">
+       <summary>Configuração manual (avançado)</summary>
+       <form className="form-stack integration-form" onSubmit={subscribe}>
+        <Input name="channel_id" label="Notification Channel ID" placeholder="Webhook.xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" required defaultValue={conn.notification_channel_id||''}/>
+        <p className="hint">Use somente se o canal Webhook já tiver sido criado na GoTo e apontar para o backend HTTPS correto.</p>
+        <Button type="submit" secondary disabled={busy}>Usar canal existente</Button>
+       </form>
+      </details>}
+     </div>}
     </>}
    </Card>
    <Card>
