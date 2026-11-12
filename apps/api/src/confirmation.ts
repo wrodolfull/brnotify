@@ -1,5 +1,6 @@
 import {query,pool} from './db.js';
 import {phoneE164} from './time.js';
+import {resolveRecentReplySource} from './reply-source.js';
 
 export type ConfirmationDecision='confirmed'|'reschedule_requested'|'declined';
 export function classifyConfirmation(text:unknown):ConfirmationDecision|null{
@@ -29,19 +30,27 @@ export async function registerIncomingDecision(tenantId:string,providerEventId:s
    return true;
   }
   const contactId=contact.rows[0].id as string;
+  // Do not reinterpret a panel/automation reply as an appointment confirmation.
+  // A missing/ambiguous origin also must not mutate an unrelated appointment.
+  const source=await resolveRecentReplySource(client,tenantId,phone,payload.timestamp||new Date().toISOString());
+  if(!source||source.kind!=='reminder'){
+   await client.query('insert into inbound_interactions(tenant_id,provider_event_id,contact_id,decision,resolution) values($1,$2,$3,$4,$5) on conflict(provider_event_id) do nothing',
+    [tenantId,providerEventId,contactId,decision,source?'different_source':'ambiguous_or_unmatched']);
+   await client.query('commit');return true;
+  }
   // Nunca pressupor que uma resposta é do agendamento mais recente se há ambiguidade.
   // O envio anterior deve ser um lembrete real e recente, não somente um cadastro.
   const candidates=await client.query(
    `select distinct e.id
     from events e join scheduled_messages m
       on m.event_id=e.id and m.tenant_id=e.tenant_id
-    where e.tenant_id=$1 and e.contact_id=$2
+    where e.tenant_id=$1 and e.contact_id=$2 and m.id=$3
       and e.confirmation_enabled and e.confirmation_status='pending'
       and e.status='scheduled' and e.starts_at>now()
       and m.sent_at>=now()-interval '7 days'
       and m.goto_message_id is not null
     order by e.id limit 2`,
-   [tenantId,contactId]
+   [tenantId,contactId,source.messageId]
   );
   const resolution=candidates.rowCount===1?'matched':candidates.rowCount===0?'no_matching_event':'ambiguous';
   let eventId:string|null=null;

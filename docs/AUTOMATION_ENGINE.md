@@ -62,3 +62,7 @@ A execução não fornece um editor n8n genérico: ela suporta um único gatilho
 - Desenho de fluxos arbitrários com ramificações ilimitadas ou execução de código de terceiros.
 
 A estrutura atual suporta ampliação futura dos gatilhos e ações sem precisar remodelar os compromissos.
+
+## Respostas associadas a templates enviados
+
+O filtro opcional `source_template_id` restringe o gatilho `message.received` ao modelo enviado anteriormente pelo BR Notify. A associação é conservadora: procura um único envio aceito nos últimos sete dias, pelo mesmo número, antes do horário da resposta. Se nenhum envio ou mais de um envio for encontrado, o fluxo específico não dispara; a GoTo não garante que a resposta informe qual template a originou. A regra sem filtro continua disponível para compatibilidade. A confirmação legada de compromissos só deve processar mensagens associadas inequivocamente a um lembrete, nunca respostas a envios avulsos. Execute `database/015_reply_template_routing.sql` antes de atualizar API/worker; publique frontend em seguida.

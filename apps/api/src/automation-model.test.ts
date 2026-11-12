@@ -8,6 +8,8 @@ const input={title:'Responder ao reagendamento',trigger_type:'message.received',
  template_id:null,template_variables:{}};
 test('accepts simple replies but rejects WhatsApp sends from unverified call events',()=>{
  assert.equal(flowSchema.safeParse(input).success,true);
+ assert.equal(flowSchema.safeParse({...input,source_template_id:'f0b16d99-8eb9-4c56-a7ab-62292a3ace17'}).success,true);
+ assert.equal(flowSchema.safeParse({...input,source_template_id:'f0b16d99-8eb9-4c56-a7ab-62292a3ace17',trigger_type:'call.ended'}).success,false);
  assert.equal(flowSchema.safeParse({...input,trigger_type:'call.ended',action_type:'whatsapp'}).success,false);
  assert.equal(flowSchema.safeParse({...input,delay_minutes:0,check_no_new_message:true}).success,false);
  assert.equal(flowSchema.safeParse({...input,trigger_type:'call.report.ready',match_mode:'contains'}).success,false);

@@ -2,6 +2,7 @@ import {pool,query} from './db.js';
 import {matchesFlow,interpolateVariables,type EventForFlow} from './automation-model.js';
 import {enqueuePanelNotification} from './panel-notifications.js';
 import {phoneE164} from './time.js';
+import {resolveRecentReplySource} from './reply-source.js';
 
 const ZERO='00000000-0000-0000-0000-000000000000';
 /** Dispatch scanning is transactional: cursor and queued runs commit together. */
@@ -32,6 +33,13 @@ export async function scanAutomationEvents(){
    let overLimit=false;
    for(const event of events.rows){
     if(!matchesFlow(flow,event as EventForFlow))continue;
+    let source:null|{templateId:string;messageId:string;kind:'panel'|'reminder'}=null;
+    if(event.event_type==='message.received'&&flow.source_template_id){
+     const phone=event.metadata?.phone;
+     source=await resolveRecentReplySource(client,flow.tenant_id,phone,event.occurred_at);
+     // Never infer a template when multiple sends might have prompted the reply.
+     if(!source||source.templateId!==flow.source_template_id)continue;
+    }
     if(event.event_type==='message.delivery.updated'){
      // Some GoTo delivery payloads omit their channel. Only track messages sent by BR Notify.
      const providerId=typeof event.metadata?.messageId==='string'?event.metadata.messageId:'';
@@ -46,9 +54,9 @@ export async function scanAutomationEvents(){
     if(quota>=1500){overLimit=true;break}
     const due=new Date(Date.now()+flow.delay_minutes*60_000);
     const inserted=await client.query(
-     `insert into automation_runs(tenant_id,flow_id,event_id,revision,due_at)
-      values($1,$2,$3,$4,$5) on conflict(flow_id,event_id) do nothing returning id`,
-     [flow.tenant_id,flow.id,event.id,flow.revision,due]
+     `insert into automation_runs(tenant_id,flow_id,event_id,revision,due_at,context)
+      values($1,$2,$3,$4,$5,$6) on conflict(flow_id,event_id) do nothing returning id`,
+     [flow.tenant_id,flow.id,event.id,flow.revision,due,JSON.stringify(source?{source_template_id:source.templateId,source_message_id:source.messageId}: {})]
     );
     if(inserted.rowCount){created++;quota++}
    }

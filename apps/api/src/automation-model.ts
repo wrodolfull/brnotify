@@ -15,6 +15,7 @@ export const flowSchema=z.object({
  match_text:z.string().trim().max(200).nullable().optional(),
  delay_minutes:z.number().int().min(0).max(10080).default(0),
  check_no_new_message:z.boolean().default(false),
+ source_template_id:uuid.nullable().optional(),
  action_type:z.enum(ACTION_TYPES),
  action_label:z.string().trim().min(3).max(180).default('Ação automática'),
  endpoint_id:uuid.nullable().optional(),
@@ -23,6 +24,7 @@ export const flowSchema=z.object({
 }).strict().superRefine((v,ctx)=>{
  const add=(message:string,path:string)=>ctx.addIssue({code:z.ZodIssueCode.custom,message,path:[path]});
  const inbound=v.trigger_type==='message.received';
+ if(v.source_template_id&&!inbound)add('O filtro por template enviado só vale para respostas WhatsApp.','source_template_id');
  const delivery=v.trigger_type==='message.delivery.updated';
  const insight=v.trigger_type==='call.ai.insight.detected';
  if(!inbound&&!delivery&&!insight&&v.match_mode!=='any')add('Este evento não oferece filtros adicionais.','match_mode');
