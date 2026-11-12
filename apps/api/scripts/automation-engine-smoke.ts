@@ -148,7 +148,7 @@ try{
   `select status,reason from automation_runs r join integration_events e on e.id=r.event_id
     where r.flow_id=$1 and e.external_key='ivr-response-ambiguous'`,[ivrFlow.id]);
  assert.equal(ignored.rows[0]?.status,'skipped','Ambiguous IVR template replies must not enqueue WhatsApp');
- assert.match(ignored.rows[0]?.reason||'',/único envio/);
+ assert.match(ignored.rows[0]?.reason||'',/dois disparos aceitos/);
  const unrelated=await listRuns('00000000-0000-4000-8000-000000000000',1,null);
  assert.equal(unrelated.total,0);
  console.log('Automações: sem backfill, idempotência, filtro, histórico, webhook assinado e WhatsApp autorizado');
