@@ -60,6 +60,8 @@ Utilize deploy/nginx.conf.example como modelo do Nginx. Configure HTTPS com cert
 7. O usuário GoTo precisa ser Super Admin para criar esta assinatura.
 8. Teste um envio real, a confirmação de entrega e um pedido de opt-out.
 
+Com a migração **016**, utilize **Ativar recebimento de respostas** na Integração GoTo para configurar o webhook automaticamente. Veja [o guia de ativação](../docs/GOTO_WHATSAPP_REPLY_WEBHOOK.md). O OAuth exige um Super Admin e o backend precisa de `API_URL` pública HTTPS e `GOTO_WEBHOOK_SECRET` com pelo menos 24 caracteres.
+
 ## 5. Operação e verificações
     pm2 logs brnotify-api --lines 100
     pm2 logs brnotify-worker --lines 100
