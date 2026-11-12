@@ -1,6 +1,7 @@
 import {useEffect,useState,type ReactNode,type FormEvent} from 'react';
 import {ChevronLeft,ChevronRight,Plus,Search,X,LoaderCircle,Inbox} from 'lucide-react';
 import {useApp} from './context';
+import {loadQuery,peekQuery,queryKey} from './query-cache';
 export function Card({children,className=''}:{children:ReactNode;className?:string}){return <section className={'card '+className}>{children}</section>}
 export function PageTitle({eyebrow,title,subtitle,action}:{eyebrow?:string;title:string;subtitle?:string;action?:ReactNode}){
  return <div className="page-heading"><div>{eyebrow&&<div className="eyebrow">{eyebrow}</div>}<h1>{title}</h1>{subtitle&&<p>{subtitle}</p>}</div>{action&&<div className="page-action">{action}</div>}</div>;
@@ -15,12 +16,43 @@ export function Modal({title,children,onClose}:{title:string;children:ReactNode;
 export function Status({value}:{value:string}){return <span className={'status status-'+value}>{({scheduled:'Programado',queued:'Na fila',processing:'Processando',sent:'Aceito pela GoTo',delivered:'Entregue',failed:'Falhou',cancelled:'Cancelado',unknown:'Indeterminado',active:'Ativo',paused:'Pausado',suspended:'Suspenso',APPROVED:'Aprovado'} as Record<string,string>)[value]||value}</span>}
 export function Empty({title='Nenhum registro',subtitle='Quando houver dados, eles aparecerão aqui.'}:{title?:string;subtitle?:string}){return <div className="empty-state"><Inbox size={30} strokeWidth={1.5}/><strong>{title}</strong><span>{subtitle}</span></div>}
 export function ErrorHint({error}:{error:string}){return error?<div className="inline-error">{error}</div>:null}
+type QueryState<T>={key:string;data:T|undefined;loading:boolean;refreshing:boolean;error:string};
+
+// Show previously fetched data immediately when a screen is revisited. Refresh
+// stale snapshots without replacing them with empty states or full-page spinners.
+export function useCachedData<T>(path:string,enabled=true){
+ const {api,actor,tenantId}=useApp();
+ const key=queryKey(actor.id,tenantId,path);
+ const [revision,setRevision]=useState(0);
+ const [state,setState]=useState<QueryState<T>>(()=>{
+  const data=peekQuery<T>(key);
+  return {key,data,loading:data===undefined,refreshing:false,error:''};
+ });
+ const snapshot=state.key===key?state:(()=>{
+  const data=peekQuery<T>(key);
+  return {key,data,loading:data===undefined,refreshing:false,error:''};
+ })();
+ useEffect(()=>{
+  if(!enabled)return;
+  let alive=true;
+  const cached=peekQuery<T>(key);
+  setState({key,data:cached,loading:cached===undefined,refreshing:cached!==undefined,error:''});
+  loadQuery<T>(key,()=>api(path),revision>0).then(data=>{
+   if(alive)setState({key,data,loading:false,refreshing:false,error:''});
+  }).catch((e:Error)=>{
+   if(alive)setState({key,data:peekQuery<T>(key),loading:false,refreshing:false,error:e.message||'Falha ao carregar dados'});
+  });
+  return()=>{alive=false};
+ },[api,key,path,revision,enabled]);
+ return {...snapshot,refresh:()=>setRevision(r=>r+1)};
+}
+
+type ListData={items:any[];total:number;pages:number};
 export function useList(path:string,enabled=true){
- const {api}=useApp();
- const [data,setData]=useState<{items:any[];total:number;pages:number}>({items:[],total:0,pages:1});
- const [page,setPage]=useState(1),[loading,setLoading]=useState(true),[error,setError]=useState(''),[revision,setRevision]=useState(0);
- useEffect(()=>{if(!enabled)return;let alive=true;setLoading(true);api(path+(path.includes('?')?'&':'?')+'page='+page).then(v=>{if(alive){setData({items:v.items||[],total:v.total||0,pages:v.pages||1});setError('')}}).catch(e=>{if(alive)setError(e.message)}).finally(()=>{if(alive)setLoading(false)});return()=>{alive=false}},[api,path,page,revision,enabled]);
- return {data,page,setPage,loading,error,refresh:()=>setRevision(v=>v+1)};
+ const [page,setPage]=useState(1);
+ const query=path+(path.includes('?')?'&':'?')+'page='+page;
+ const result=useCachedData<ListData>(query,enabled);
+ return {...result,data:result.data||{items:[],total:0,pages:1},page,setPage};
 }
 export function Pagination({page,pages,onChange}:{page:number;pages:number;onChange:(p:number)=>void}){
  if(pages<=1)return null;
