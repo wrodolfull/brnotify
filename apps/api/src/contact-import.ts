@@ -53,7 +53,10 @@ async function spreadsheet(file:Express.Multer.File):Promise<Parsed>{
   result.total++;
   try{
    const get=(key:string)=>{const idx=col.get(key);return idx?cell(row.getCell(idx).value):''};
-   const name=get('nome'),phone=phoneE164(get('whatsapp')),email=get('email');
+   const name=get('nome');
+   if(name==='EXEMPLO - Maria Santos')
+    throw new Error('Esta é a linha de exemplo do modelo. Substitua os dados ou exclua a linha antes de importar.');
+   const phone=phoneE164(get('whatsapp')),email=get('email');
    if(name.length<2||name.length>180)throw new Error('Nome deve ter entre 2 e 180 caracteres.');
    if(email&&!z.string().email().safeParse(email).success)throw new Error('E-mail inválido.');
    const raw=get('consentimento').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
@@ -107,22 +110,49 @@ export async function downloadContactsTemplate(_req:Request,res:Response){
  const book=new ExcelJS.Workbook();
  const sheet=book.addWorksheet('Contatos');
  sheet.addRow(headers);
- sheet.addRow(['Maria Santos','+5519999999999','maria@example.com','SIM','Autorização registrada no balcão']);
- sheet.addRow(['João Lima','+5519888888888','','NÃO','']);
- sheet.getRow(1).font={bold:true,color:{argb:'FFFFFFFF'}};
- sheet.getRow(1).fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF111827'}};
+ sheet.addRow(['EXEMPLO - Maria Santos','+5511999999999','maria@exemplo.com','SIM','Autorização presencial (substituir pela origem real)']);
  sheet.columns=headers.map(x=>({width:Math.max(24,x.length+6)}));
+ sheet.getColumn(1).width=30;
+ sheet.getColumn(5).width=56;
+ sheet.views=[{state:'frozen',ySplit:1}];
+ const required=new Set(['nome','whatsapp']);
+ const hints:Record<string,string>={
+  nome:'OBRIGATÓRIO: nome completo, de 2 a 180 caracteres.',
+  whatsapp:'OBRIGATÓRIO: número com DDI e DDD. Use um número real do contato.',
+  email:'OPCIONAL: e-mail válido, ou deixe em branco.',
+  consentimento:'OPCIONAL: SIM quando houver autorização real para WhatsApp; NÃO ou vazio caso contrário.',
+  origem_consentimento:'CONDICIONAL: obrigatória quando consentimento for SIM; informe onde e como a autorização foi obtida.'
+ };
+ headers.forEach((column,index)=>{
+  const cell=sheet.getCell(1,index+1);
+  cell.font={bold:true,color:{argb:'FFFFFFFF'}};
+  cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:required.has(column)?'FFB91C1C':column==='origem_consentimento'?'FF92400E':'FF111827'}};
+  cell.note=hints[column];
+ });
+ sheet.getRow(1).height=26;
+ const example=sheet.getRow(2);
+ example.height=26;
+ example.font={italic:true,color:{argb:'FF1E40AF'}};
+ example.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFEFF6FF'}};
  const help=book.addWorksheet('Instruções');
  help.addRows([
   ['BR Notify — importação exclusiva de contatos'],
+  ['IMPORTANTE','A primeira linha de dados (linha 2) é um EXEMPLO. Substitua ou exclua antes de importar.'],
+  ['Cabeçalhos','Mantenha os nomes originais das colunas, sem alterações.'],
+  ['Cabeçalho vermelho','Campo OBRIGATÓRIO: nome e whatsapp.'],
+  ['Cabeçalho laranja','Campo CONDICIONAL: origem_consentimento, obrigatória quando consentimento=SIM.'],
+  ['Cabeçalho escuro','Campo OPCIONAL: email e consentimento.'],
   ['Limite','10.000 contatos por planilha, XLSX ou CSV, até 12 MB'],
   ['nome / whatsapp','Obrigatórios. WhatsApp com DDI e DDD.'],
   ['email','Opcional, formato válido.'],
   ['consentimento','SIM ou NÃO. Vazio significa NÃO.'],
-  ['origem_consentimento','Obrigatória apenas quando SIM, descreva a autorização real.'],
+  ['origem_consentimento','Se SIM, registre a origem verdadeira da autorização.'],
   ['Contatos existentes','Ignorados por telefone; opt-out e dados anteriores preservados.'],
   ['Importação','Não cria compromissos nem envia mensagens.']
  ]);
+ help.getColumn(1).width=30;
+ help.getColumn(2).width=93;
+ help.getRow(1).font={bold:true,size:14};
  res.setHeader('content-type','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
  res.setHeader('content-disposition','attachment; filename="brnotify-modelo-contatos.xlsx"');
  res.send(Buffer.from(await book.xlsx.writeBuffer()));
