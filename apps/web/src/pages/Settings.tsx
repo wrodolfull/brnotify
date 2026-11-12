@@ -268,7 +268,7 @@ export function SettingsPage(){
         <Button type="submit" secondary disabled={busy}>Usar canal existente</Button>
        </form>
       </details>}
-     </div>
+     </div>}
     </>}
    </Card>
    <Card>
