@@ -70,7 +70,7 @@ async function searchSubscriptions(tenantId:string,accountKey:string,provider:ty
  throw new Error('Muitas assinaturas para verificar automaticamente. Verifique a GoTo.');
 }
 function complete(sub:Subscription){return EVENTS.every(e=>sub.eventTypes.includes(e))}
-function existingConflict(subs:Subscription[],preferredChannel:string|null){
+export function existingConflict(subs:Subscription[],preferredChannel:string|null){
  const same=subs.find(x=>x.channelId===preferredChannel);
  if(same&&!complete(same))
   return 'Existe uma assinatura incompleta nesse canal. Revise os eventos cadastrados na GoTo antes de reativar.';

@@ -13,7 +13,6 @@ function client(rows:unknown[]){return {query:async (sql:string,params:unknown[]
  assert.equal(params[0],id);
  assert.equal(params[1],'+5511991234567');
  assert.equal(params[2],at);
- assert.match(String(params[3]),/^[a-f0-9]{64}$/);
  return {rows};
 }} as any}
 test('attributes a reply only to one accepted outbound template',async()=>{
@@ -21,8 +20,6 @@ test('attributes a reply only to one accepted outbound template',async()=>{
   {kind:'panel',templateId:'tpl-1',messageId:'message-1'});
  assert.deepEqual(await resolveRecentReplySource(client([{kind:'reminder',template_id:'tpl-2',id:'message-2'}]),id,'11991234567',at),
   {kind:'reminder',templateId:'tpl-2',messageId:'message-2'});
- assert.deepEqual(await resolveRecentReplySource(client([{kind:'test',template_id:'tpl-3',id:'test-1'}]),id,'11991234567',at),
-  {kind:'test',templateId:'tpl-3',messageId:'test-1'});
 });
 test('fails closed on missing or ambiguous message history',async()=>{
  assert.equal(await resolveRecentReplySource(client([]),id,'11991234567',at),null);

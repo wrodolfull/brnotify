@@ -33,14 +33,14 @@ export async function scanAutomationEvents(){
    let overLimit=false;
    for(const event of events.rows){
     if(!matchesFlow(flow,event as EventForFlow))continue;
-    let source:null|{templateId:string;messageId:string;kind:'panel'|'reminder'|'test'}=null;
+    let source:null|{templateId:string;messageId:string;kind:'panel'|'reminder'}=null;
     if(event.event_type==='message.received'&&flow.source_template_id){
      const phone=event.metadata?.phone;
      source=await resolveRecentReplySource(client,flow.tenant_id,phone,event.occurred_at);
      // Never infer a template when multiple sends might have prompted the reply.
      if(!source||source.templateId!==flow.source_template_id){
       const reason=!source
-       ? 'Resposta recebida, mas não foi encontrado um único envio anterior desse número nos últimos 7 dias (incluindo envios de teste).'
+       ? 'Resposta recebida, mas não foi encontrado um único envio anterior desse número nos últimos 7 dias.'
        : 'Resposta recebida, mas o template de origem difere do selecionado nesta automação.';
       // Store a skipped execution instead of silently dropping a valid text match.
       const skipped=await client.query(

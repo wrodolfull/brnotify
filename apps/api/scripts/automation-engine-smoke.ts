@@ -120,6 +120,35 @@ try{
  assert.equal(send.rowCount,1);
  assert.equal(send.rows[0].source,'automation');
  assert.equal(send.rows[0].run_status,'completed');
+ // Real IVR sends are already in on_demand_messages (source='ivr'), not goto_test_sends.
+ // A matching response must trigger its origin-template flow, and competing sends must be skipped.
+ const ivrPhone='+5511991234567';
+ const ivrFlow=await createFlow(tenant,{...base,title:'URA: opção 2',
+  source_template_id:template,action_type:'internal',action_label:'Opção 2 recebida'});
+ await setFlowStatus(tenant,ivrFlow.id,'active');
+ await query(`insert into on_demand_messages(
+  tenant_id,template_id,recipient_phone,recipient_name,consent_source,dedupe_hash,
+  status,source,provider_message_id,sent_at
+ ) values($1,$2,$3,'Teste URA','ivr_option_whatsapp',$4,'sent','ivr',$5,now()-interval '15 seconds')`,
+ [tenant,template,ivrPhone,'a'.repeat(64),'provider-ivr-1']);
+ await received('ivr-response-single','2',ivrPhone);
+ await scanAutomationEvents();
+ const ivrResult=await query('select status from automation_runs where tenant_id=$1 and flow_id=$2',
+  [tenant,ivrFlow.id]);
+ assert.equal(ivrResult.rowCount,1,'The IVR template response should produce one run');
+ assert.equal(ivrResult.rows[0].status,'pending');
+ await query(`insert into on_demand_messages(
+  tenant_id,template_id,recipient_phone,recipient_name,consent_source,dedupe_hash,
+  status,source,provider_message_id,sent_at
+ ) values($1,$2,$3,'Teste URA','ivr_option_whatsapp',$4,'sent','ivr',$5,now()-interval '5 seconds')`,
+ [tenant,template,ivrPhone,'b'.repeat(64),'provider-ivr-2']);
+ await received('ivr-response-ambiguous','2',ivrPhone);
+ await scanAutomationEvents();
+ const ignored=await query(
+  `select status,reason from automation_runs r join integration_events e on e.id=r.event_id
+    where r.flow_id=$1 and e.external_key='ivr-response-ambiguous'`,[ivrFlow.id]);
+ assert.equal(ignored.rows[0]?.status,'skipped','Ambiguous IVR template replies must not enqueue WhatsApp');
+ assert.match(ignored.rows[0]?.reason||'',/único envio/);
  const unrelated=await listRuns('00000000-0000-4000-8000-000000000000',1,null);
  assert.equal(unrelated.total,0);
  console.log('Automações: sem backfill, idempotência, filtro, histórico, webhook assinado e WhatsApp autorizado');
