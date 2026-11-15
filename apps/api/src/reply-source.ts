@@ -32,6 +32,47 @@ export async function resolveRecentReplySource(client:Pick<PoolClient,'query'>,t
  return {kind:candidate.kind,templateId:candidate.template_id,messageId:candidate.id};
 }
 
+
+/**
+ * Workflow routing needs the identity of the template, not of a specific appointment.
+ * Multiple sends of the same template have identical configured reply options; treat
+ * them as one template candidate. DIFFERENT templates, including NULL, remain ambiguous.
+ * Do not use this function to confirm individual appointments.
+ */
+type FlowTemplateCandidate={template_id:string|null;send_count:number;message_id:string|null};
+async function flowTemplateCandidates(client:Pick<PoolClient,'query'>,tenantId:string,phone:string,at:Date):Promise<FlowTemplateCandidate[]>{
+ const result=await client.query(`
+  select template_id,count(*)::int as send_count,
+   case when count(*)=1 then min(id::text) else null end as message_id
+  from (
+   select m.template_id,m.id,m.sent_at
+    from on_demand_messages m where m.tenant_id=$1 and m.recipient_phone=$2
+    and m.provider_message_id is not null and m.sent_at is not null
+    and m.status in ('sent','delivered')
+   union all
+   select m.template_id,m.id,m.sent_at
+    from scheduled_messages m join events e on e.id=m.event_id and e.tenant_id=m.tenant_id
+    join contacts c on c.id=e.contact_id and c.tenant_id=e.tenant_id
+    where m.tenant_id=$1 and c.phone=$2 and m.goto_message_id is not null
+    and m.sent_at is not null and m.status in ('sent','delivered')
+  ) outbound
+  where sent_at<=$3::timestamptz
+   and sent_at>$3::timestamptz-interval '7 days'
+  group by template_id limit 2`,[tenantId,phone,at.toISOString()]);
+ return result.rows as FlowTemplateCandidate[];
+}
+export type ReplyFlowTemplateSource={templateId:string;messageId:string|null;sendCount:number};
+export async function resolveFlowTemplateSource(client:Pick<PoolClient,'query'>,tenantId:string,rawPhone:unknown,rawAt:unknown):Promise<ReplyFlowTemplateSource|null>{
+ let phone:string;
+ try{phone=phoneE164(rawPhone)}catch{return null}
+ const at=new Date(String(rawAt||''));
+ if(!Number.isFinite(at.getTime()))return null;
+ const candidates=await flowTemplateCandidates(client,tenantId,phone,at);
+ if(candidates.length!==1||!candidates[0].template_id)return null;
+ return {templateId:candidates[0].template_id,messageId:candidates[0].message_id,
+  sendCount:Number(candidates[0].send_count)};
+}
+
 /** Explain why an inbound reply was not associated, without revealing a contact phone number. */
 export async function diagnoseUnmatchedReply(client:Pick<PoolClient,'query'>,tenantId:string,rawPhone:unknown,rawAt:unknown):Promise<string>{
  let phone:string;
@@ -39,27 +80,13 @@ export async function diagnoseUnmatchedReply(client:Pick<PoolClient,'query'>,ten
  catch{return 'A GoTo informou um identificador de destinatário que não pode ser interpretado como telefone E.164. Confira o autor da mensagem recebida.'}
  const at=new Date(String(rawAt||''));
  if(!Number.isFinite(at.getTime()))return 'A GoTo enviou uma data de resposta inválida; não é seguro relacionar ao disparo.';
- const candidates=await client.query(`
-  select kind,template_id,id from (
-   select 'panel' as kind,m.template_id,m.id,m.sent_at
-    from on_demand_messages m where m.tenant_id=$1 and m.recipient_phone=$2
-    and m.provider_message_id is not null and m.sent_at is not null
-    and m.status in ('sent','delivered')
-   union all
-   select 'reminder' as kind,m.template_id,m.id,m.sent_at
-    from scheduled_messages m join events e on e.id=m.event_id and e.tenant_id=m.tenant_id
-    join contacts c on c.id=e.contact_id and c.tenant_id=e.tenant_id
-    where m.tenant_id=$1 and c.phone=$2 and m.goto_message_id is not null
-    and m.sent_at is not null and m.status in ('sent','delivered')
-  ) candidates where sent_at<=$3::timestamptz
-   and sent_at>$3::timestamptz-interval '7 days'
-  order by sent_at desc,id desc limit 2`,[tenantId,phone,at.toISOString()]);
- if(candidates.rows.length>1)
-  return 'Há pelo menos dois disparos aceitos para este número nos últimos 7 dias. A resposta é ambígua: o BR Notify não escolherá um template automaticamente.';
- if(candidates.rows.length===1&&!candidates.rows[0].template_id)
-  return 'Foi encontrado um único envio, mas seu template de origem não está mais disponível no histórico.';
- if(candidates.rows.length===1)
-  return 'O único envio encontrado não corresponde ao template selecionado nesta automação.';
+ const candidates=await flowTemplateCandidates(client,tenantId,phone,at);
+ if(candidates.length>1)
+  return 'Há disparos aceitos de dois ou mais templates diferentes para este número nos últimos 7 dias. A GoTo não indica qual template foi respondido; a automação não será executada.';
+ if(candidates.length===1&&!candidates[0].template_id)
+  return 'Foi encontrado um envio, mas seu template de origem não está mais disponível no histórico.';
+ if(candidates.length===1)
+  return 'O template encontrado nos envios anteriores é diferente do template selecionado nesta automação.';
  // Check the most recent IVR/panel sends even if they were not accepted or fell outside the time window.
  const history=await client.query(`
   select status,sent_at,provider_message_id,template_id

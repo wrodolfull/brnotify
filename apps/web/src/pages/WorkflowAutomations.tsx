@@ -191,7 +191,7 @@ export function WorkflowAutomations(){
      </select></label>
      {isWhatsapp&&<>
       <label className="field"><span>Associar a qual template enviado?</span><select value={form.source_template_id||''} onChange={e=>update('source_template_id',e.target.value||null)}><option value="">Qualquer resposta (modo anterior)</option>{options.templates.map(t=><option key={t.id} value={t.id}>{t.name} ({t.language_code})</option>)}</select></label>
-      <p className="wf-hint">Se escolher um template, a resposta só ativa o fluxo quando houver exatamente um envio recente (até 7 dias) associado a esse número. Se houver envios concorrentes, o BR Notify não executa o fluxo por segurança.</p>
+      <p className="wf-hint">Se escolher um template, o BR Notify verifica os disparos aceitos para o número nos últimos 7 dias. Repetições do mesmo template são permitidas; se diferentes templates puderem ter originado a resposta, o fluxo não será executado por segurança.</p>
       <label className="field"><span>Qual resposta deve iniciar?</span><select value={form.match_mode} onChange={e=>update('match_mode',e.target.value as Form['match_mode'])}>
        <option value="any">Qualquer resposta</option><option value="equals">Resposta igual a</option><option value="contains">Resposta contém</option>
       </select></label>

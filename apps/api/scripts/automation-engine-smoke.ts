@@ -121,7 +121,7 @@ try{
  assert.equal(send.rows[0].source,'automation');
  assert.equal(send.rows[0].run_status,'completed');
  // Real IVR sends are already in on_demand_messages (source='ivr'), not goto_test_sends.
- // A matching response must trigger its origin-template flow, and competing sends must be skipped.
+ // Repeated sends of ONE template may trigger the flow. Different templates remain ambiguous.
  const ivrPhone='+5511991234567';
  const ivrFlow=await createFlow(tenant,{...base,title:'URA: opção 2',
   source_template_id:template,action_type:'internal',action_label:'Opção 2 recebida'});
@@ -142,13 +142,30 @@ try{
   status,source,provider_message_id,sent_at
  ) values($1,$2,$3,'Teste URA','ivr_option_whatsapp',$4,'sent','ivr',$5,now()-interval '5 seconds')`,
  [tenant,template,ivrPhone,'b'.repeat(64),'provider-ivr-2']);
+ await received('ivr-response-same-template','2',ivrPhone);
+ await scanAutomationEvents();
+ const matched=await query(
+  `select status,context from automation_runs r join integration_events e on e.id=r.event_id
+    where r.flow_id=$1 and e.external_key='ivr-response-same-template'`,[ivrFlow.id]);
+ assert.equal(matched.rows[0]?.status,'pending','Repeated sends of the same template must match');
+ assert.equal(matched.rows[0]?.context?.source_template_id,template);
+ assert.equal(matched.rows[0]?.context?.source_message_id,null,'Do not invent a specific replied-to message');
+ assert.equal(matched.rows[0]?.context?.source_send_count,2);
+ const other=(await query(
+  `insert into message_templates(tenant_id,name,language_code,status,definition)
+   values($1,'other_prompt_ci','pt_BR','APPROVED','{}'::jsonb) returning id`,[tenant])).rows[0].id;
+ await query(`insert into on_demand_messages(
+  tenant_id,template_id,recipient_phone,recipient_name,consent_source,dedupe_hash,
+  status,source,provider_message_id,sent_at
+ ) values($1,$2,$3,'Teste URA','ivr_option_whatsapp',$4,'sent','ivr',$5,now()-interval '2 seconds')`,
+ [tenant,other,ivrPhone,'c'.repeat(64),'provider-ivr-3']);
  await received('ivr-response-ambiguous','2',ivrPhone);
  await scanAutomationEvents();
  const ignored=await query(
   `select status,reason from automation_runs r join integration_events e on e.id=r.event_id
     where r.flow_id=$1 and e.external_key='ivr-response-ambiguous'`,[ivrFlow.id]);
- assert.equal(ignored.rows[0]?.status,'skipped','Ambiguous IVR template replies must not enqueue WhatsApp');
- assert.match(ignored.rows[0]?.reason||'',/dois disparos aceitos/);
+ assert.equal(ignored.rows[0]?.status,'skipped','Different template replies must not enqueue WhatsApp');
+ assert.match(ignored.rows[0]?.reason||'',/templates diferentes/);
  const unrelated=await listRuns('00000000-0000-4000-8000-000000000000',1,null);
  assert.equal(unrelated.total,0);
  console.log('Automações: sem backfill, idempotência, filtro, histórico, webhook assinado e WhatsApp autorizado');
